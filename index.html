@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FORGE/OS — Key Control Panel</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#14110d; --panel:#1c1813; --panel2:#241f18; --line:#332b20;
+  --org:#ff5c1f; --org-dim:#b5420f; --sand:#e8ddcc; --mut:#7d7361;
+  --ok:#9fd94a; --warn:#f2b23e; --bad:#ff4d4d;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+::selection{background:var(--org);color:var(--bg)}
+body{background:var(--bg);color:var(--sand);font-family:'Space Mono',monospace;min-height:100vh;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.2;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:48px 48px}
+button,input,select{font-family:inherit}
+button{cursor:pointer}
+h1,h2,h3{font-family:'Archivo Black',sans-serif;text-transform:uppercase}
+.mut{color:var(--mut)}.center{text-align:center}
+.c-org{color:var(--org)}.c-ok{color:var(--ok)}.c-warn{color:var(--warn)}.c-bad{color:var(--bad)}
+.bg-org{background:var(--org)}.bg-ok{background:var(--ok)}.bg-warn{background:var(--warn)}.bg-bad{background:var(--bad)}
+.hazard{position:fixed;top:0;left:0;right:0;height:6px;z-index:9000;
+  background:repeating-linear-gradient(-45deg,var(--org) 0 12px,var(--bg) 12px 24px)}
+
+/* TOMBOL */
+.btn{border:none;background:var(--sand);color:var(--bg);font-family:'Archivo Black';
+  text-transform:uppercase;font-size:.75rem;padding:.85rem 1.4rem;box-shadow:4px 4px 0 #000;
+  transition:transform .08s,box-shadow .08s;user-select:none}
+.btn:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 #000}
+.btn:active{transform:translate(3px,3px);box-shadow:0 0 0 #000;transition:transform .04s}
+.btn-org{background:var(--org)}
+.btn-dark{background:var(--panel2);color:var(--mut);border:1px solid var(--line)}
+.btn-sm{padding:.5rem .8rem;font-size:.6rem;box-shadow:2px 2px 0 #000}
+.btn-block{width:100%;display:block}
+.mini{background:var(--panel2);border:1px solid var(--line);color:var(--mut);padding:.35rem .6rem;font-size:.65rem;transition:.15s}
+.mini:hover{border-color:var(--org);color:var(--org)}
+.mini.danger:hover{border-color:var(--bad);color:var(--bad)}
+.ripple-dot{position:fixed;border-radius:50%;background:rgba(255,92,31,.45);pointer-events:none;
+  transform:translate(-50%,-50%);animation:rip .5s ease-out forwards;z-index:9999}
+@keyframes rip{from{width:8px;height:8px;opacity:1}to{width:120px;height:120px;opacity:0}}
+
+/* LOGIN */
+#loginScreen{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+  transition:opacity .5s,visibility .5s;background:radial-gradient(circle at 50% 30%,#1e1913 0%,var(--bg) 70%)}
+#loginScreen.hide{opacity:0;visibility:hidden}
+.login-wrap{display:flex;flex-direction:column;align-items:center;gap:1.4rem;
+  animation:wrapIn .7s cubic-bezier(.2,1,.3,1)}
+@keyframes wrapIn{from{opacity:0;transform:translateY(40px) scale(.94)}}
+.login-stamp{border:3px solid var(--org);padding:.4rem 1.4rem;color:var(--org);font-family:'Archivo Black';
+  font-size:.75rem;transform:rotate(-2deg);animation:stampIn .6s .2s cubic-bezier(.2,1.6,.4,1) backwards;letter-spacing:.2em}
+@keyframes stampIn{from{transform:rotate(-16deg) scale(2.4);opacity:0}}
+.login-box{width:min(410px,94vw);background:var(--panel);border:1px solid var(--line);box-shadow:10px 10px 0 #000;
+  position:relative;overflow:hidden;transition:transform .15s ease-out}
+.login-glow{position:absolute;top:-60%;left:-60%;width:120%;height:220%;pointer-events:none;
+  background:radial-gradient(circle,rgba(255,92,31,.1) 0%,transparent 60%);transition:left .3s}
+.login-head{padding:1.2rem 1.5rem;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.login-head h1{font-size:1.35rem}
+.login-head h1 i{color:var(--org);font-style:normal}
+.lamp{width:12px;height:12px;border-radius:50%;background:var(--ok);box-shadow:0 0 12px var(--ok);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.login-sub{padding:.6rem 1.5rem 0;font-size:.68rem;color:var(--org);min-height:1.2em;letter-spacing:.1em}
+.login-sub::after{content:"▌";animation:blink 1s infinite}
+@keyframes blink{50%{opacity:0}}
+.login-body{padding:1.2rem 1.5rem 1.5rem}
+.f-label{font-size:.62rem;letter-spacing:.25em;color:var(--mut);text-transform:uppercase;display:block;margin:.9rem 0 .4rem}
+.f-input{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--sand);padding:.8rem 1rem;font-size:.9rem;outline:none;transition:.2s}
+.f-input:focus{border-color:var(--org);box-shadow:inset 0 -3px 0 var(--org)}
+select.f-input{cursor:pointer}
+#loginErr{color:var(--bad);font-size:.72rem;margin-top:.7rem;min-height:1.2em}
+.shake{animation:shake .4s}
+@keyframes shake{20%,60%{transform:translateX(-9px)}40%,80%{transform:translateX(9px)}}
+.demo{font-size:.62rem;color:var(--mut);margin-top:1rem;text-align:center}
+.sweep{position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(115deg,transparent 30%,rgba(255,92,31,.25) 50%,transparent 70%);
+  transform:translateX(-120%)}
+.sweep.go{animation:sweepGo .8s ease forwards}
+@keyframes sweepGo{to{transform:translateX(120%)}}
+.login-foot{font-size:.58rem;color:var(--mut);letter-spacing:.25em}
+
+/* BOOT */
+#boot{position:fixed;inset:0;z-index:200;background:var(--bg);display:none;flex-direction:column;
+  justify-content:flex-end;padding:2.5rem;font-size:.85rem;line-height:2;color:var(--org-dim)}
+#boot.on{display:flex}
+#boot .ok{color:var(--ok)}
+#boot .big{font-family:'Archivo Black';font-size:2rem;color:var(--org);margin-top:1rem}
+
+/* APP */
+#app{display:none}
+#app.on{display:block}
+.layout{display:flex;min-height:100vh}
+aside{width:250px;background:var(--panel);border-right:1px solid var(--line);position:sticky;top:0;
+  height:100vh;display:flex;flex-direction:column}
+.brand{padding:1.4rem 1.3rem;border-bottom:1px solid var(--line)}
+.brand h2{font-size:1.15rem}
+.brand h2 i{color:var(--org);font-style:normal}
+.brand small{color:var(--mut);font-size:.58rem;letter-spacing:.2em}
+.role-chip{display:inline-block;margin-top:.6rem;padding:.2rem .6rem;border:1px solid var(--org);color:var(--org);
+  font-size:.55rem;letter-spacing:.2em;font-weight:700}
+.nav{flex:1;padding:1rem .7rem;display:flex;flex-direction:column;gap:3px;overflow-y:auto}
+.nav button{display:flex;align-items:center;gap:.6rem;width:100%;background:none;border:1px solid transparent;
+  color:var(--mut);padding:.72rem .9rem;font-size:.78rem;text-align:left;transition:.15s;text-transform:uppercase}
+.nav button:hover{color:var(--sand);background:var(--panel2)}
+.nav button.active{color:var(--org);border:1px solid var(--org);background:var(--panel2)}
+.side-foot{padding:1.1rem;border-top:1px solid var(--line)}
+.saldo-mini{font-size:.55rem;color:var(--mut);letter-spacing:.2em;margin-bottom:.7rem}
+.saldo-mini b{display:block;font-size:1rem;color:var(--ok);margin-top:.2rem}
+main{flex:1;padding:1.8rem 2.2rem;min-width:0}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.8rem;gap:1rem;flex-wrap:wrap}
+.tb-left{display:flex;gap:1rem;align-items:center}
+.tb-right{display:flex;gap:1.2rem;align-items:center;font-size:.7rem;color:var(--mut)}
+.whoami{border:1px solid var(--line);padding:.35rem .8rem;color:var(--sand)}
+.topbar h2{font-size:clamp(1.4rem,4vw,2.1rem);line-height:1}
+.topbar h2 i{color:var(--org);font-style:normal}
+.breadcrumb{font-size:.6rem;color:var(--mut);letter-spacing:.2em;margin-bottom:.4rem;text-transform:uppercase}
+#hamb{display:none;background:var(--panel2);border:1px solid var(--org);color:var(--org);padding:.45rem .8rem;font-size:1rem}
+
+/* PANEL */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1.2rem;margin-bottom:1.8rem}
+.gauge{background:var(--panel);border:1px solid var(--line);padding:1.2rem;opacity:0;animation:gIn .45s forwards}
+.gauge:nth-child(2){animation-delay:.08s}
+.gauge:nth-child(3){animation-delay:.16s}
+.gauge:nth-child(4){animation-delay:.24s}
+@keyframes gIn{from{opacity:0;transform:translateY(18px)}to{opacity:1}}
+.gauge .k{font-size:.58rem;color:var(--mut);letter-spacing:.2em;text-transform:uppercase}
+.gauge .n{font-family:'Archivo Black';font-size:2rem;margin:.3rem 0 .2rem}
+.gauge .bar{height:4px;background:var(--line);margin-top:.6rem}
+.gauge .bar i{display:block;height:100%;transition:width .9s}
+.grid-2{display:grid;grid-template-columns:1fr 1.4fr;gap:1.2rem;margin-bottom:1.8rem}
+.panel{background:var(--panel);border:1px solid var(--line);box-shadow:6px 6px 0 #000;margin-bottom:1.8rem}
+.panel-head{padding:1rem 1.3rem;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap}
+.panel-head h3{font-size:.82rem}
+.panel-head h3 b{color:var(--org)}
+.acts{display:flex;gap:.6rem;flex-wrap:wrap}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.76rem;min-width:720px}
+th{text-align:left;padding:.8rem 1.2rem;color:var(--mut);font-weight:400;font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;border-bottom:1px solid var(--line)}
+td{padding:.75rem 1.2rem;border-bottom:1px solid rgba(51,43,32,.5);vertical-align:middle}
+tbody tr{animation:rowIn .3s backwards;transition:background .15s}
+tbody tr:hover{background:var(--panel2)}
+@keyframes rowIn{from{opacity:0;transform:translateX(-12px)}}
+.keystr{color:var(--org);font-weight:700}
+.badge{display:inline-block;padding:.25rem .7rem;font-size:.55rem;letter-spacing:.15em;text-transform:uppercase;font-weight:700;border:2px solid}
+.b-active{color:var(--ok);border-color:var(--ok)}
+.b-blocked{color:var(--bad);border-color:var(--bad)}
+.b-revoked{color:var(--mut);border-color:var(--mut);text-decoration:line-through}
+.b-expired{color:var(--warn);border-color:var(--warn)}
+.row-acts{display:flex;gap:.4rem;flex-wrap:wrap}
+.saldo-big{font-family:'Archivo Black';font-size:clamp(1.6rem,5vw,2.6rem);color:var(--ok);margin:.6rem 0 .3rem}
+.cost-preview{background:var(--panel2);border:1px dashed var(--org);padding:.7rem .9rem;font-size:.75rem;margin-top:1rem}
+.bulk-out{margin-top:1rem;font-size:.75rem;line-height:2;color:var(--org);white-space:pre-wrap;max-height:220px;overflow-y:auto}
+.quick-amt{display:flex;gap:.5rem;margin-top:.8rem;flex-wrap:wrap}
+.xbar{height:6px;background:var(--line);min-width:100px}
+.xbar i{display:block;height:100%;transition:width .8s}
+.empty{padding:2rem;text-align:center;color:var(--mut);font-size:.75rem}
+.info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.8rem}
+.info-box{background:var(--panel2);border:1px solid var(--line);padding:1.1rem 1.2rem}
+.info-box .k{font-size:.55rem;color:var(--mut);letter-spacing:.25em;text-transform:uppercase}
+.info-box .v{margin-top:.45rem;font-size:.95rem}
+
+/* MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(10,8,5,.85);z-index:500;display:flex;align-items:center;
+  justify-content:center;opacity:0;visibility:hidden;transition:.25s;padding:1rem;backdrop-filter:blur(3px)}
+.modal-bg.open{opacity:1;visibility:visible}
+.modal{width:min(480px,94vw);background:var(--panel);border:1px solid var(--org);box-shadow:10px 10px 0 #000;
+  transform:translateY(40px) scale(.95);transition:transform .3s cubic-bezier(.2,1.3,.3,1)}
+.modal-bg.open .modal{transform:none}
+.modal-head{padding:1rem 1.3rem;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.modal-head h3{font-size:.9rem;color:var(--org)}
+.modal-body{padding:1.3rem}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin-top:.2rem}
+
+/* TOAST */
+#toasts{position:fixed;right:1.2rem;bottom:1.2rem;z-index:800;display:flex;flex-direction:column;gap:.6rem}
+.toast{background:var(--panel2);border:1px solid var(--line);border-left:5px solid var(--org);
+  padding:.8rem 1.1rem;font-size:.75rem;min-width:280px;max-width:360px;box-shadow:5px 5px 0 #000;
+  animation:tIn .35s cubic-bezier(.2,1.2,.3,1)}
+.toast b{display:block;font-family:'Archivo Black';text-transform:uppercase;font-size:.62rem;margin-bottom:.2rem;color:var(--org)}
+.toast.ok{border-left-color:var(--ok)}.toast.ok b{color:var(--ok)}
+.toast.err{border-left-color:var(--bad)}.toast.err b{color:var(--bad)}
+.toast.warn{border-left-color:var(--warn)}.toast.warn b{color:var(--warn)}
+.toast.out{animation:tOut .25s forwards}
+@keyframes tIn{from{transform:translateX(120%)}}
+@keyframes tOut{to{transform:translateX(120%);opacity:0}}
+
+@media(max-width:980px){
+  aside{position:fixed;left:-260px;z-index:600;transition:left .3s}
+  aside.open{left:0}
+  #hamb{display:inline-block}
+  .stats{grid-template-columns:1fr 1fr}
+  .grid-2,.info-grid{grid-template-columns:1fr}
+  main{padding:1.2rem}
+}
+</style>
+</head>
+<body>
+<div class="hazard"></div>
+
+<div id="loginScreen">
+  <div class="login-wrap">
+    <div class="login-stamp">RESTRICTED AREA</div>
+    <div class="login-box" id="loginBox">
+      <div class="login-glow"></div>
+      <div class="login-head">
+        <h1>FORGE<i>/OS</i></h1>
+        <span class="lamp"></span>
+      </div>
+      <div class="login-sub" id="loginSub"></div>
+      <div class="login-body">
+        <label class="f-label">Operator ID</label>
+        <input class="f-input" id="liUser" placeholder="admin" autocomplete="off">
+        <label class="f-label">Passcode</label>
+        <input class="f-input" id="liPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+        <div id="loginErr"></div>
+        <button class="btn btn-org btn-block" onclick="doLogin()"><span>▶ Unlock Panel</span></button>
+        <p class="demo">admin: <b>admin / forge123</b> · reseller: <b>novastore / nova123</b></p>
+      </div>
+      <div class="sweep" id="sweep"></div>
+    </div>
+    <div class="login-foot">FORGE/OS v4.0 // JKT-04 // SECURE CHANNEL</div>
+  </div>
+</div>
+
+<div id="boot"><div id="bootLog"></div></div>
+
+<div id="app">
+<div class="layout">
+  <aside id="sidebar">
+    <div class="brand">
+      <h2>FORGE<i>/OS</i></h2>
+      <small>KEY CONTROL v4.0</small>
+      <div class="role-chip" id="roleChip">ADMIN</div>
+    </div>
+    <div class="nav" id="navMenu">
+      <button class="active" data-view="dashboard" onclick="go('dashboard')">▤ Control Room</button>
+      <button data-view="keys" onclick="go('keys')">⌗ Key Registry</button>
+      <button data-view="wallet" onclick="go('wallet')">◉ Saldo &amp; Top Up</button>
+      <button data-view="bulk" onclick="go('bulk')">⋯ Batch Forge</button>
+      <button data-view="expiry" onclick="go('expiry')">◔ Expiry Radar</button>
+      <button data-view="reseller" onclick="go('reseller')">◇ Reseller Hub</button>
+      <button data-view="txn" onclick="go('txn')">≣ Transaksi</button>
+      <button data-view="profile" onclick="go('profile')">▣ Operator</button>
+    </div>
+    <div class="side-foot">
+      <div class="saldo-mini">SALDO<br><b id="sideSaldo">—</b></div>
+      <button class="btn btn-dark btn-sm" onclick="logout()">■ Shutdown</button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <div class="tb-left">
+        <button id="hamb" onclick="document.getElementById('sidebar').classList.toggle('open')">≡</button>
+        <div>
+          <div class="breadcrumb" id="crumb">FORGE/OS // CONTROL</div>
+          <h2 id="viewTitle">CONTROL <i>ROOM</i></h2>
+        </div>
+      </div>
+      <div class="tb-right">
+        <div class="whoami" id="whoami">admin</div>
+        <div class="clock">SYS <b id="clock">--:--:--</b></div>
+      </div>
+    </div>
+
+    <div id="v-dashboard">
+      <div class="stats">
+        <div class="gauge"><div class="k">Total Key</div><div class="n c-org" id="stTotal">0</div><div class="bar"><i class="bg-org" style="width:100%"></i></div></div>
+        <div class="gauge"><div class="k">Active</div><div class="n c-ok" id="stActive">0</div><div class="bar"><i class="bg-ok" id="barActive"></i></div></div>
+        <div class="gauge"><div class="k">Blocked/Revoked</div><div class="n c-bad" id="stBlocked">0</div><div class="bar"><i class="bg-bad" id="barBlocked"></i></div></div>
+        <div class="gauge"><div class="k">Expiring ≤7d</div><div class="n c-warn" id="stExpiring">0</div><div class="bar"><i class="bg-warn" id="barExp"></i></div></div>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><h3><b>▌</b> Saldo</h3></div>
+          <div class="modal-body center">
+            <div class="saldo-big" id="dashSaldo">Rp —</div>
+            <div class="mut">Harga key: <b class="c-org" id="dashPrice">—</b>/hari</div>
+            <button class="btn btn-org btn-sm" style="margin-top:1rem" onclick="go('wallet')">Kelola Saldo →</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3><b>▌</b> Event Feed</h3></div>
+          <div class="tbl-wrap"><table><tbody id="logBody"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="v-keys" style="display:none">
+      <div class="panel">
+        <div class="panel-head">
+          <h3><b>▌</b> Key Registry</h3>
+          <div class="acts">
+            <input class="f-input" id="search" placeholder="cari key / owner…" oninput="renderKeys()">
+            <button class="btn btn-org btn-sm" onclick="openModal('mCreate')">+ Forge Key</button>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Key</th><th>Owner</th><th>Status</th><th>Created</th><th>Expires</th><th>Reseller</th><th>Harga</th><th>Controls</th></tr></thead>
+            <tbody id="keyBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="v-wallet" style="display:none">
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head"><h3><b>▌</b> Dompet Saya</h3></div>
+          <div class="modal-body center">
+            <div class="saldo-big" id="walletSaldo">Rp —</div>
+            <div class="mut" id="walletRole"></div>
+            <button class="btn btn-org" style="margin-top:1rem" onclick="openModal('mTopup')">+ Top Up Saldo</button>
+          </div>
+        </div>
+        <div class="panel" id="panelTransfer">
+          <div class="panel-head"><h3><b>▌</b> Transfer ke Reseller</h3></div>
+          <div class="modal-body">
+            <label class="f-label">Reseller</label><select class="f-input" id="trTo"></select>
+            <label class="f-label">Jumlah (Rp)</label><input class="f-input" id="trAmt" type="number" value="50000" min="1000">
+            <button class="btn btn-org" style="margin-top:1.2rem;width:100%" onclick="doTransfer()">⇄ Kirim Saldo</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3><b>▌</b> Transaksi Terakhir</h3></div>
+        <div class="tbl-wrap">
+          <table><thead><tr><th>Waktu</th><th>Tipe</th><th>Detail</th><th>Nominal</th></tr></thead><tbody id="txnMini"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div id="v-bulk" style="display:none">
+      <div class="panel" style="max-width:620px">
+        <div class="panel-head"><h3><b>▌</b> Batch Forge</h3></div>
+        <div class="modal-body">
+          <div class="row2">
+            <div><label class="f-label">Jumlah</label><input class="f-input" id="blCount" type="number" value="5" min="1" max="200"></div>
+            <div><label class="f-label">Durasi (hari)</label><input class="f-input" id="blDays" type="number" value="30"></div>
+          </div>
+          <label class="f-label">Prefix</label>
+          <input class="f-input" id="blPrefix" value="FG" maxlength="6">
+          <div class="cost-preview">Estimasi biaya: <b id="blCost">Rp —</b></div>
+          <button class="btn btn-org" style="margin-top:1rem" onclick="genBulk()">⚡ Jalankan Batch</button>
+          <div id="bulkOut" class="bulk-out"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="v-expiry" style="display:none">
+      <div class="panel">
+        <div class="panel-head"><h3><b>▌</b> Expiry Radar</h3></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Key</th><th>Owner</th><th>Expires</th><th>Sisa</th><th>Umur</th><th>Extend</th></tr></thead>
+            <tbody id="expBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="v-reseller" style="display:none">
+      <div class="panel">
+        <div class="panel-head">
+          <h3><b>▌</b> Reseller Hub</h3>
+          <button class="btn btn-org btn-sm" onclick="openModal('mReseller')">+ Add Reseller</button>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Reseller</th><th>Saldo</th><th>Key Terjual</th><th>Paket</th><th>Controls</th></tr></thead>
+            <tbody id="resBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="v-txn" style="display:none">
+      <div class="panel">
+        <div class="panel-head"><h3><b>▌</b> Semua Transaksi</h3></div>
+        <div class="tbl-wrap">
+          <table><thead><tr><th>Waktu</th><th>Akun</th><th>Tipe</th><th>Detail</th><th>Nominal</th></tr></thead><tbody id="txnBody"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div id="v-profile" style="display:none">
+      <div class="info-grid">
+        <div class="info-box"><div class="k">Akun</div><div class="v" id="pfUser">—</div></div>
+        <div class="info-box"><div class="k">Role</div><div class="v c-org" id="pfRole">—</div></div>
+        <div class="info-box"><div class="k">Login Terakhir</div><div class="v" id="lastLogin">—</div></div>
+        <div class="info-box"><div class="k">Total Aksi</div><div class="v" id="actCount">0</div></div>
+        <div class="info-box"><div class="k">Harga Key</div><div class="v c-org" id="pfPrice">—</div></div>
+        <div class="info-box"><div class="k">API Token</div><div class="v keystr">fg_live_••••8f2a</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3><b style="color:var(--bad)">▌</b> Pengaturan &amp; Danger Zone</h3></div>
+        <div class="modal-body">
+          <label class="f-label">Harga Key per Hari (Rp)</label>
+          <div style="display:flex;gap:.7rem">
+            <input class="f-input" id="setPrice" type="number" min="100">
+            <button class="btn btn-org btn-sm" onclick="savePrice()">Simpan</button>
+          </div>
+          <div style="display:flex;gap:.8rem;flex-wrap:wrap;margin-top:1.4rem">
+            <button class="btn btn-dark btn-sm" onclick="resetData()">↺ Reset Semua Data</button>
+            <button class="btn btn-dark btn-sm" onclick="logout()">■ Keluar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</div>
+
+<div class="modal-bg" id="mCreate" onclick="if(event.target===this)closeModal('mCreate')">
+  <div class="modal">
+    <div class="modal-head"><h3>+ FORGE KEY</h3><button class="mini" onclick="closeModal('mCreate')">✕</button></div>
+    <div class="modal-body">
+      <label class="f-label">Owner / User</label><input class="f-input" id="crOwner" placeholder="nama_user">
+      <div class="row2">
+        <div><label class="f-label">Durasi (hari)</label><input class="f-input" id="crDays" type="number" value="30" oninput="updCost()"></div>
+        <div><label class="f-label">Reseller</label><select class="f-input" id="crReseller" onchange="fillPrefix()"></select></div>
+      </div>
+      <div class="cost-preview">Biaya: <b id="crCost">Rp —</b> · Saldo: <b id="crSaldo">Rp —</b></div>
+      <button class="btn btn-org btn-block" style="margin-top:1rem" onclick="createKey()">✚ Forge &amp; Bayar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="mExtend" onclick="if(event.target===this)closeModal('mExtend')">
+  <div class="modal">
+    <div class="modal-head"><h3>◔ EXTEND</h3><button class="mini" onclick="closeModal('mExtend')">✕</button></div>
+    <div class="modal-body">
+      <p class="mut" style="font-size:.78rem">Target: <b class="keystr" id="exKey"></b></p>
+      <label class="f-label">Tambah (hari)</label><input class="f-input" id="exDays" type="number" value="30" oninput="updCostEx()">
+      <div class="cost-preview">Biaya: <b id="exCost">Rp —</b></div>
+      <button class="btn btn-org btn-block" style="margin-top:1rem" onclick="doExtend()">↻ Perpanjang &amp; Bayar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="mReseller" onclick="if(event.target===this)closeModal('mReseller')">
+  <div class="modal">
+    <div class="modal-head"><h3>+ ADD RESELLER</h3><button class="mini" onclick="closeModal('mReseller')">✕</button></div>
+    <div class="modal-body">
+      <label class="f-label">Nama Reseller</label><input class="f-input" id="rsName" placeholder="misal: MegaStore">
+      <div class="row2">
+        <div><label class="f-label">Kuota Key</label><input class="f-input" id="rsQuota" type="number" value="30"></div>
+        <div><label class="f-label">Paket (hari)</label><input class="f-input" id="rsDays" type="number" value="30"></div>
+      </div>
+      <div class="row2">
+        <div><label class="f-label">Prefix</label><input class="f-input" id="rsPrefix" maxlength="3" placeholder="MS"></div>
+        <div><label class="f-label">Saldo Awal (Rp)</label><input class="f-input" id="rsSaldo" type="number" value="100000"></div>
+      </div>
+      <button class="btn btn-org btn-block" style="margin-top:1rem" onclick="addReseller()">✚ Daftarkan Reseller</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="mTopup" onclick="if(event.target===this)closeModal('mTopup')">
+  <div class="modal">
+    <div class="modal-head"><h3>+ TOP UP SALDO</h3><button class="mini" onclick="closeModal('mTopup')">✕</button></div>
+    <div class="modal-body">
+      <label class="f-label">Jumlah (Rp)</label><input class="f-input" id="tpAmt" type="number" value="50000" min="1000">
+      <div class="quick-amt">
+        <button class="mini" onclick="setTp(25000)">25rb</button>
+        <button class="mini" onclick="setTp(50000)">50rb</button>
+        <button class="mini" onclick="setTp(100000)">100rb</button>
+        <button class="mini" onclick="setTp(500000)">500rb</button>
+      </div>
+      <button class="btn btn-org btn-block" style="margin-top:1rem" onclick="doTopup()">◉ Konfirmasi Top Up</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+/* ================= STATE ================= */
+var resellers = JSON.parse(localStorage.getItem('fg_res')||'null') || [
+  {name:'NovaStore', quota:50, sold:12, expires:Date.now()+45*864e5, prefix:'NS', user:'novastore', pass:'nova123', saldo:150000},
+  {name:'DarkShop',  quota:40, sold:38, expires:Date.now()+5*864e5,  prefix:'DS', user:'darkshop',  pass:'dark123',  saldo:25000},
+  {name:'ZenMarket', quota:30, sold:7,  expires:Date.now()-2*864e5,  prefix:'ZM', user:'zenmarket', pass:'zen123',   saldo:0}
+];
+var keys = JSON.parse(localStorage.getItem('fg_keys')||'null') || seed();
+var txns = JSON.parse(localStorage.getItem('fg_txn')||'null') || [];
+var price = parseInt(localStorage.getItem('fg_price')||'1000',10);
+var logs = [
+  {t:'2 mnt', m:'Key <b>FG-X7Q2-9MZB</b> dipakai <b>putri_dev</b>', c:'ok'},
+  {t:'1 jam', m:'Key <b>FG-A1B2-C3D4</b> diblokir manual', c:'bad'},
+  {t:'3 jam', m:'Reseller <b>DarkShop</b> top up Rp 50.000', c:'warn'}
+];
+var role='admin', myName='', myUser='', extendTarget=null;
+var actionCount = parseInt(localStorage.getItem('fg_acts')||'0',10);
+
+function saveAll(){
+  localStorage.setItem('fg_keys',JSON.stringify(keys));
+  localStorage.setItem('fg_res',JSON.stringify(resellers));
+  localStorage.setItem('fg_txn',JSON.stringify(txns));
+  localStorage.setItem('fg_acts',String(actionCount));
+  localStorage.setItem('fg_price',String(price));
+}
+function seed(){
+  var now=Date.now(), d=864e5;
+  return [
+    {key:'FG-A1B2-C3D4', owner:'rizky_gaming', status:'blocked', created:now-20*d, expires:now+10*d, reseller:'NovaStore', cost:20000},
+    {key:'FG-X7Q2-9MZB', owner:'putri_dev',    status:'active',  created:now-5*d,  expires:now+25*d, reseller:'',          cost:0},
+    {key:'FG-L0P9-K8J7', owner:'andrei.id',    status:'active',  created:now-2*d,  expires:now+4*d,  reseller:'DarkShop',  cost:12000},
+    {key:'FG-T5R4-E3W2', owner:'bagusx',       status:'revoked', created:now-40*d, expires:now+2*d,  reseller:'',          cost:0},
+    {key:'FG-M1N0-B9V8', owner:'citra_art',    status:'expired', created:now-35*d, expires:now-1*d,  reseller:'ZenMarket', cost:30000},
+    {key:'FG-Q6W7-X8Y9', owner:'fahmi_ml',     status:'active',  created:now-12*d, expires:now+18*d, reseller:'NovaStore', cost:5000}
+  ];
+}
+
+/* ================= HELPERS ================= */
+function $(id){return document.getElementById(id)}
+function fmt(ts){return new Date(ts).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'})}
+function rupiah(n){return 'Rp '+Number(n).toLocaleString('id-ID')}
+function daysLeft(ts){return Math.ceil((ts-Date.now())/864e5)}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function genKey(pre){
+  pre=pre||'FG';
+  var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  function seg(n){var r='';for(var i=0;i<n;i++)r+=c[Math.floor(Math.random()*c.length)];return r}
+  return pre+'-'+seg(4)+'-'+seg(4);
+}
+function mySaldo(){
+  if(role==='admin') return 999999999;
+  for(var i=0;i<resellers.length;i++) if(resellers[i].name===myName) return resellers[i].saldo;
+  return 0;
+}
+function setSaldo(name,val){
+  for(var i=0;i<resellers.length;i++) if(resellers[i].name===name) resellers[i].saldo=val;
+}
+function getReseller(name){
+  for(var i=0;i<resellers.length;i++) if(resellers[i].name===name) return resellers[i];
+  return null;
+}
+function addTxn(type,detail,amount){
+  txns.unshift({time:new Date().toLocaleString('id-ID'),acc:(role==='admin'?'admin':myName),type:type,detail:detail,amount:amount});
+}
+function toast(type,title,msg){
+  var t=document.createElement('div');
+  t.className='toast '+(type||'');
+  t.innerHTML='<b>'+title+'</b>'+msg;
+  $('toasts').appendChild(t);
+  setTimeout(function(){t.classList.add('out');setTimeout(function(){t.remove()},250)},4000);
+}
+function addLog(m,c){logs.unshift({t:'now',m:m,c:c||''});renderLogs()}
+function bump(){actionCount++}
+
+/* RIPPLE efek renyah tiap klik */
+document.addEventListener('click',function(e){
+  var r=document.createElement('div');
+  r.className='ripple-dot';
+  r.style.left=e.clientX+'px';
+  r.style.top=e.clientY+'px';
+  document.body.appendChild(r);
+  setTimeout(function(){r.remove()},520);
+});
+
+/* ================= LOGIN ================= */
+var greetings=['> secure channel established…','> handshake JKT-04 ok…','> identify yourself, operator…','> awaiting credentials…'];
+var gIdx=0;
+function typeGreet(){
+  var el=$('loginSub'), text=greetings[gIdx%greetings.length];
+  gIdx++;
+  el.textContent='';
+  var i=0;
+  var iv=setInterval(function(){
+    el.textContent=text.substring(0,++i);
+    if(i>=text.length)clearInterval(iv);
+  },28);
+}
+typeGreet();
+setInterval(typeGreet,5000);
+
+var lb=$('loginBox');
+lb.addEventListener('mousemove',function(e){
+  var r=lb.getBoundingClientRect();
+  var x=(e.clientX-r.left)/r.width-.5;
+  var y=(e.clientY-r.top)/r.height-.5;
+  lb.style.transform='perspective(800px) rotateY('+(x*8)+'deg) rotateX('+(-y*8)+'deg)';
+  lb.querySelector('.login-glow').style.left=(x*80)+'%';
+});
+lb.addEventListener('mouseleave',function(){ lb.style.transform='none' });
+
+function doLogin(){
+  var u=$('liUser').value.trim().toLowerCase();
+  var p=$('liPass').value;
+  if(u==='admin'&&p==='forge123'){
+    role='admin'; myName=''; myUser='admin';
+    loginSuccess();
+    return;
+  }
+  for(var i=0;i<resellers.length;i++){
+    if(resellers[i].user===u&&resellers[i].pass===p){
+      role='reseller';
+      myName=resellers[i].name;
+      myUser=resellers[i].user;
+      loginSuccess();
+      return;
+    }
+  }
+  $('loginErr').textContent='✕ ACCESS DENIED — kredensial ditolak.';
+  lb.classList.remove('shake');
+  void lb.offsetWidth;
+  lb.classList.add('shake');
+}
+function loginSuccess(){
+  $('loginErr').textContent='';
+  $('sweep').classList.add('go');
+  setTimeout(function(){
+    $('loginScreen').classList.add('hide');
+    boot();
+  },600);
+}
+function boot(){
+  var lines=[
+    '&gt; FORGE/OS kernel v4.0 ......... <span class="ok">[LOADED]</span>',
+    '&gt; verify license ............... <span class="ok">[VALID]</span>',
+    '&gt; auth role .................... <span class="ok">['+role.toUpperCase()+']</span>',
+    '&gt; load registry ................ <span class="ok">['+keys.length+' keys]</span>',
+    '&gt; wallet sync .................. <span class="ok">['+rupiah(mySaldo())+']</span>',
+    '<div class="big">■ PANEL UNLOCKED — WELCOME '+myUser.toUpperCase()+'</div>'
+  ];
+  $('boot').classList.add('on');
+  var i=0;
+  var iv=setInterval(function(){
+    $('bootLog').innerHTML+=lines[i]+'<br>';
+    i++;
+    if(i>=lines.length){
+      clearInterval(iv);
+      setTimeout(function(){
+        $('boot').classList.remove('on');
+        $('app').classList.add('on');
+        setupRole();
+        renderAll();
+        toast('ok','Online','Selamat datang, '+esc(myUser)+'. Saldo: '+rupiah(mySaldo()));
+      },800);
+    }
+  },320);
+}
+function setupRole(){
+  $('roleChip').textContent=role.toUpperCase();
+  $('whoami').textContent=myUser;
+  if(role==='reseller'){
+    var b=document.querySelector('.nav button[data-view="reseller"]');
+    if(b)b.style.display='none';
+    go('keys');
+  }else{
+    go('dashboard');
+  }
+}
+function logout(){
+  $('app').classList.remove('on');
+  $('loginScreen').classList.remove('hide');
+  $('liPass').value='';
+  $('sweep').classList.remove('go');
+  typeGreet();
+}
+
+/* ================= NAV ================= */
+var meta={
+  dashboard:['CONTROL <i>ROOM</i>','FORGE/OS // CONTROL'],
+  keys:['KEY <i>REGISTRY</i>','FORGE/OS // DATABASE'],
+  wallet:['SALDO <i>& TOP UP</i>','FORGE/OS // FINANCE'],
+  bulk:['BATCH <i>FORGE</i>','FORGE/OS // MASS PRODUCTION'],
+  expiry:['EXPIRY <i>RADAR</i>','FORGE/OS // MONITORING'],
+  reseller:['RESELLER <i>HUB</i>','FORGE/OS // PARTNERS'],
+  txn:['TRANS<i>AKSI</i>','FORGE/OS // LEDGER'],
+  profile:['PRO<i>FILE</i>','FORGE/OS // OPERATOR']
+};
+function go(v){
+  var all=['dashboard','keys','wallet','bulk','expiry','reseller','txn','profile'];
+  var btns=document.querySelectorAll('.nav button');
+  for(var i=0;i<btns.length;i++) btns[i].classList.toggle('active',btns[i].getAttribute('data-view')===v);
+  for(var j=0;j<all.length;j++) $('v-'+all[j]).style.display=(all[j]===v?'':'none');
+  $('viewTitle').innerHTML=meta[v][0];
+  $('crumb').textContent=meta[v][1];
+  $('sidebar').classList.remove('open');
+}
+
+/* ================= RENDER ================= */
+function renderAll(){
+  renderStats(); renderKeys(); renderExpiry(); renderResellers();
+  renderTxns(); fillSelects(); renderSaldo(); renderLogs();
+  $('actCount').textContent=actionCount;
+  $('pfUser').textContent=myUser;
+  $('pfRole').textContent=role.toUpperCase();
+  $('lastLogin').textContent=new Date().toLocaleString('id-ID');
+  $('pfPrice').textContent=rupiah(price)+'/hari';
+  $('dashPrice').textContent=rupiah(price);
+  $('setPrice').value=price;
+  if(role==='reseller'){ $('panelTransfer').style.display='none'; }
+}
+function renderSaldo(){
+  var s=mySaldo();
+  $('sideSaldo').textContent=rupiah(s);
+  $('dashSaldo').textContent=rupiah(s);
+  $('walletSaldo').textContent=rupiah(s);
+  $('walletRole').textContent=role==='admin'?'Admin — saldo tak terbatas':'Reseller: '+esc(myName);
+  $('crSaldo').textContent=rupiah(s);
+}
+function renderStats(){
+  var list=keys.filter(function(k){return role==='admin'||k.reseller===myName});
+  var act=0,blk=0,exp=0;
+  list.forEach(function(k){
+    if(k.status==='active'&&k.expires>Date.now())act++;
+    if(k.status==='blocked'||k.status==='revoked')blk++;
+    if(k.status==='active'&&daysLeft(k.expires)<=7&&daysLeft(k.expires)>=0)exp++;
+  });
+  $('stTotal').textContent=list.length;
+  $('stActive').textContent=act;
+  $('stBlocked').textContent=blk;
+  $('stExpiring').textContent=exp;
+  var t=Math.max(1,list.length);
+  $('barActive').style.width=(act/t*100)+'%';
+  $('barBlocked').style.width=(blk/t*100)+'%';
+  $('barExp').style.width=(exp/t*100)+'%';
+}
+var badgeMap={active:'b-active',blocked:'b-blocked',revoked:'b-revoked',expired:'b-expired'};
+function renderKeys(){
+  var q=($('search').value||'').toLowerCase();
+  var list=keys.filter(function(k){
+    if(role==='reseller'&&k.reseller!==myName)return false;
+    return k.key.toLowerCase().indexOf(q)>-1||k.owner.toLowerCase().indexOf(q)>-1;
+  });
+  var html='';
+  list.forEach(function(k,i){
+    html+='<tr style="animation-delay:'+(i*0.03)+'s">'
+      +'<td class="keystr">'+esc(k.key)+'</td>'
+      +'<td>'+esc(k.owner)+'</td>'
+      +'<td><span class="badge '+(badgeMap[k.status]||'')+'">'+k.status+'</span></td>'
+      +'<td style="color:var(--mut)">'+fmt(k.created)+'</td>'
+      +'<td style="color:var(--mut)">'+fmt(k.expires)+'</td>'
+      +'<td>'+(k.reseller?esc(k.reseller):'—')+'</td>'
+      +'<td>'+(k.cost?rupiah(k.cost):'—')+'</td>'
+      +'<td><div class="row-acts">'
+      +'<button class="mini" onclick="openExtend(\''+k.key+'\')">◔+</button>'
+      +'<button class="mini" onclick="blockKey(\''+k.key+'\')">⊘</button>'
+      +'<button class="mini" onclick="revokeKey(\''+k.key+'\')">⌫</button>'
+      +'<button class="mini danger" onclick="deleteKey(\''+k.key+'\')">✕</button>'
+      +'</div></td></tr>';
+  });
+  $('keyBody').innerHTML=html||'<tr><td colspan="8" class="empty">Registry kosong.</td></tr>';
+}
+function renderLogs(){
+  var cls={ok:'--ok',bad:'--bad',warn:'--warn'};
+  $('logBody').innerHTML=logs.slice(0,8).map(function(l){
+    return '<tr><td style="color:var(--mut);width:70px">'+l.t+'</td>'
+      +'<td style="'+(cls[l.c]?'color:var'+cls[l.c]:'')+'">'+l.m+'</td></tr>';
+  }).join('');
+}
+function renderExpiry(){
+  var list=keys.filter(function(k){
+    if(role==='reseller'&&k.reseller!==myName)return false;
+    return k.status!=='revoked';
+  }).sort(function(a,b){return a.expires-b.expires});
+  var html='';
+  list.forEach(function(k){
+    var total=Math.max(1,k.expires-k.created);
+    var used=Math.min(100,Math.max(0,(Date.now()-k.created)/total*100));
+    var dl=daysLeft(k.expires);
+    var c=dl<0?'c-bad':(dl<=7?'c-warn':'c-ok');
+    var sisa=dl<0?('EXPIRED '+(-dl)+' hr lalu'):(dl+' hari');
+    var bar=dl<0?'bg-bad':(dl<=7?'bg-warn':'bg-ok');
+    html+='<tr><td class="keystr">'+esc(k.key)+'</td><td>'+esc(k.owner)+'</td>'
+      +'<td style="color:var(--mut)">'+fmt(k.expires)+'</td>'
+      +'<td class="'+c+'">'+sisa+'</td>'
+      +'<td style="min-width:120px"><div class="xbar"><i class="'+bar+'" style="width:'+used+'%"></i></div></td>'
+      +'<td><button class="mini" onclick="openExtend(\''+k.key+'\')">◔+</button></td></tr>';
+  });
+  $('expBody').innerHTML=html||'<tr><td colspan="6" class="empty">Tidak ada key.</td></tr>';
+}
+function renderResellers(){
+  if(role!=='admin')return;
+  var html='';
+  resellers.forEach(function(r,i){
+    var dl=Math.ceil((r.expires-Date.now())/864e5);
+    var pct=Math.min(100,r.sold/Math.max(1,r.quota)*100);
+    html+='<tr style="animation-delay:'+(i*0.05)+'s">'
+      +'<td><b>'+esc(r.name)+'</b><br><small style="color:var(--mut)">login: '+esc(r.user)+' · prefix: '+esc(r.prefix)+'</small></td>'
+      +'<td class="'+(r.saldo<20000?'c-bad':'c-ok')+'">'+rupiah(r.saldo)+'</td>'
+      +'<td>'+r.sold+' / '+r.quota+'<div class="xbar" style="margin-top:.4rem"><i class="'+(pct>=90?'bg-bad':'bg-org')+'" style="width:'+pct+'%"></i></div></td>'
+      +'<td style="color:var(--mut)">'+fmt(r.expires)+'<br><small>'+(dl<0?'KEDALUWARSA':dl+' hr lagi')+'</small></td>'
+      +'<td><div class="row-acts">'
+      +'<button class="mini" onclick="topupReseller(\''+esc(r.name)+'\')">◉ Top Up</button>'
+      +'<button class="mini" onclick="resetPass(\''+esc(r.name)+'\')">🔑</button>'
+      +'<button class="mini danger" onclick="delReseller(\''+esc(r.name)+'\')">✕</button>'
+      +'</div></td></tr>';
+  });
+  $('resBody').innerHTML=html||'<tr><td colspan="5" class="empty">Belum ada reseller.</td></tr>';
+}
+function renderTxns(){
+  var list=txns.filter(function(t){return role==='admin'||t.acc===myName});
+  var html='';
+  list.forEach(function(t){
+    var c=t.amount>0?'c-ok':'c-bad';
+    html+='<tr><td style="color:var(--mut)">'+t.time+'</td><td>'+esc(t.acc)+'</td>'
+      +'<td>'+esc(t.type)+'</td><td>'+t.detail+'</td>'
+      +'<td class="'+c+'">'+(t.amount>0?'+':'')+rupiah(t.amount)+'</td></tr>';
+  });
+  $('txnBody').innerHTML=html||'<tr><td colspan="5" class="empty">Belum ada transaksi.</td></tr>';
+  var mini='';
+  list.slice(0,5).forEach(function(t){
+    var c=t.amount>0?'c-ok':'c-bad';
+    mini+='<tr><td style="color:var(--mut)">'+t.time+'</td><td>'+esc(t.type)+'</td>'
+      +'<td>'+t.detail+'</td><td class="'+c+'">'+(t.amount>0?'+':'')+rupiah(t.amount)+'</td></tr>';
+  });
+  $('txnMini').innerHTML=mini||'<tr><td colspan="4" class="empty">Kosong.</td></tr>';
+}
+function fillSelects(){
+  var opts='<option value="">— internal —</option>';
+  resellers.forEach(function(r){opts+='<option>'+esc(r.name)+'</option>'});
+  $('crReseller').innerHTML=opts;
+  var tr='';
+  resellers.forEach(function(r){tr+='<option>'+esc(r.name)+'</option>'});
+  $('trTo').innerHTML=tr;
+  fillPrefix();
+}
+function fillPrefix(){
+  var rs=$('crReseller').value, pre='FG';
+  resellers.forEach(function(r){if(r.name===rs)pre=r.prefix});
+  $('crReseller').setAttribute('data-prefix',pre);
+  updCost();
+}
+
+/* ================= BIAYA ================= */
+function updCost(){
+  var d=parseInt($('crDays').value,10)||0;
+  $('crCost').textContent=rupiah(d*price);
+}
+function updCostEx(){
+  var d=parseInt($('exDays').value,10)||0;
+  $('exCost').textContent=rupiah(d*price);
+}
+function updBulkCost(){
+  var n=parseInt($('blCount').value,10)||0;
+  var d=parseInt($('blDays').value,10)||0;
+  $('blCost').textContent=rupiah(n*d*price);
+}
+document.addEventListener('input',function(e){
+  if(e.target.id==='blCount'||e.target.id==='blDays')updBulkCost();
+});
+
+/* ================= MODAL ================= */
+function openModal(id){$(id).classList.add('open')}
+function closeModal(id){$(id).classList.remove('open')}
+window.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){
+    var open=document.querySelectorAll('.modal-bg.open');
+    for(var i=0;i<open.length;i++)open[i].classList.remove('open');
+  }
+});
+
+/* ================= KEY ACTIONS ================= */
+function pay(amount,label){
+  var s=mySaldo();
+  if(s<amount){
+    toast('err','Saldo Kurang','Butuh '+rupiah(amount)+', saldo '+rupiah(s)+'. Top up dulu!');
+    return false;
+  }
+  if(role==='reseller'){
+    setSaldo(myName,s-amount);
+    addTxn('PEMBELIAN',label,-amount);
+  }
+  return true;
+}
+function createKey(){
+  var owner=$('crOwner').value.trim();
+  if(!owner){toast('err','Gagal','Owner wajib diisi.');return}
+  var days=Math.max(1,parseInt($('crDays').value,10)||30);
+  var rs=$('crReseller').value;
+  var pre=$('crReseller').getAttribute('data-prefix')||'FG';
+  if(role==='reseller')rs=myName;
+  var cost=days*price;
+  if(!pay(cost,'Forge key '+esc(owner)+' ('+days+'hr)'))return;
+  var k={key:genKey(pre),owner:owner,status:'active',created:Date.now(),expires:Date.now()+days*864e5,reseller:rs,cost:cost};
+  keys.unshift(k);
+  bump(); saveAll();
+  closeModal('mCreate');
+  $('crOwner').value='';
+  renderAll();
+  addLog('Key <b class="keystr">'+esc(k.key)+'</b> diforge untuk <b>'+esc(owner)+'</b>','ok');
+  toast('ok','Key Dibuat',esc(k.key)+' — '+days+' hari, biaya '+rupiah(cost));
+}
+function openExtend(key){
+  extendTarget=key;
+  $('exKey').textContent=key;
+  updCostEx();
+  openModal('mExtend');
+}
+function doExtend(){
+  var k=null;
+  for(var i=0;i<keys.length;i++)if(keys[i].key===extendTarget){k=keys[i];break}
+  if(!k)return;
+  var d=Math.max(1,parseInt($('exDays').value,10)||30);
+  var cost=d*price;
+  if(!pay(cost,'Extend '+k.key+' +'+d+'hr'))return;
+  k.expires+=d*864e5;
+  k.cost=(k.cost||0)+cost;
+  if(k.status==='expired')k.status='active';
+  bump(); saveAll();
+  closeModal('mExtend');
+  renderAll();
+  addLog('Key <b class="keystr">'+esc(k.key)+'</b> diperpanjang +'+d+' hr','warn');
+  toast('ok','Diperpanjang',esc(k.key)+' +'+d+' hari ('+rupiah(cost)+')');
+}
+function blockKey(key){
+  for(var i=0;i<keys.length;i++){
+    if(keys[i].key===key){
+      keys[i].status=(keys[i].status==='blocked')?'active':'blocked';
+      addLog('Key <b class="keystr">'+esc(key)+'</b> '+(keys[i].status==='blocked'?'diblokir':'di-unblock'),keys[i].status==='blocked'?'bad':'ok');
+      toast(keys[i].status==='blocked'?'err':'ok',keys[i].status==='blocked'?'Diblokir':'Di-unblock',esc(key));
+      break;
+    }
+  }
+  bump(); saveAll(); renderAll();
+}
+function revokeKey(key){
+  for(var i=0;i<keys.length;i++)if(keys[i].key===key)keys[i].status='revoked';
+  addLog('Key <b class="keystr">'+esc(key)+'</b> dicabut permanen','bad');
+  bump(); saveAll(); renderAll();
+  toast('err','Revoked',esc(key)+' dicabut permanen.');
+}
+function deleteKey(key){
+  keys=keys.filter(function(x){return x.key!==key});
+  addLog('Key <b class="keystr">'+esc(key)+'</b> dihapus dari registry','bad');
+  bump(); saveAll(); renderAll();
+  toast('warn','Terhapus',esc(key));
+}
+function genBulk(){
+  var n=Math.min(200,Math.max(1,parseInt($('blCount').value,10)||5));
+  var d=Math.max(1,parseInt($('blDays').value,10)||30);
+  var pre=($('blPrefix').value||'FG').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||'FG';
+  var rs=(role==='reseller')?myName:'';
+  var cost=n*d*price;
+  if(!pay(cost,'Batch forge '+n+' key ('+d+'hr)'))return;
+  var out=[];
+  for(var i=0;i<n;i++){
+    keys.push({key:genKey(pre),owner:(role==='reseller'?myName:'bulk')+'_'+(i+1),status:'active',
+      created:Date.now(),expires:Date.now()+d*864e5,reseller:rs,cost:Math.round(cost/n)});
+    out.push(keys[keys.length-1].key);
+  }
+  bump(); saveAll(); renderAll();
+  $('bulkOut').textContent=out.join('\n');
+  addLog('<b>'+n+'</b> key di-forge via batch ('+d+' hr)','ok');
+  toast('ok','Batch Selesai',n+' key dibuat, total '+rupiah(cost));
+}
+
+/* ================= WALLET ================= */
+function setTp(v){$('tpAmt').value=v}
+function doTopup(){
+  var amt=Math.max(1000,parseInt($('tpAmt').value,10)||0);
+  if(role==='admin'){
+    toast('warn','Admin','Saldo admin tak terbatas — top up reseller via Reseller Hub.');
+    return;
+  }
+  setSaldo(myName,mySaldo()+amt);
+  addTxn('TOP UP','Self top up (simulasi)',amt);
+  bump(); saveAll();
+  closeModal('mTopup');
+  renderAll();
+  addLog('Top up <b>'+rupiah(amt)+'</b> masuk','ok');
+  toast('ok','Top Up Berhasil','+'+rupiah(amt)+' masuk ke saldo.');
+}
+function doTransfer(){
+  if(role!=='admin'){toast('err','Ditolak','Hanya admin.');return}
+  var to=$('trTo').value;
+  var amt=Math.max(1000,parseInt($('trAmt').value,10)||0);
+  if(!to){toast('err','Gagal','Pilih reseller tujuan.');return}
+  var r=getReseller(to);
+  if(!r){toast('err','Gagal','Reseller tidak ditemukan.');return}
+  r.saldo+=amt;
+  txns.unshift({time:new Date().toLocaleString('id-ID'),acc:'admin',type:'TRANSFER',
+    detail:'Admin kirim ke <b>'+esc(to)+'</b>',amount:0});
+  bump(); saveAll(); renderAll();
+  addLog('Transfer <b>'+rupiah(amt)+'</b> → <b>'+esc(to)+'</b>','ok');
+  toast('ok','Terkirim',rupiah(amt)+' → '+esc(to));
+}
+function topupReseller(name){
+  var amt=prompt('Top up saldo untuk '+name+' (Rp):','50000');
+  if(amt===null)return;
+  amt=parseInt(amt,10);
+  if(!amt||amt<1000){toast('err','Gagal','Minimal Rp 1.000.');return}
+  var r=getReseller(name);
+  if(!r)return;
+  r.saldo+=amt;
+  txns.unshift({time:new Date().toLocaleString('id-ID'),acc:'admin',type:'TOP UP',
+    detail:'Admin top up <b>'+esc(name)+'</b> +'+rupiah(amt),amount:0});
+  bump(); saveAll(); renderAll();
+  addLog('Top up <b>'+esc(name)+'</b> +'+rupiah(amt),'ok');
+  toast('ok','Top Up OK',esc(name)+' +'+rupiah(amt));
+}
+function resetPass(name){
+  var np=genKey('').replace(/-/g,'').substring(0,8).toLowerCase();
+  var r=getReseller(name);
+  if(!r)return;
+  r.pass=np;
+  bump(); saveAll(); renderAll();
+  toast('warn','Password Reset',esc(name)+' → password baru: <b>'+np+'</b> (catat!)');
+}
+
+/* ================= RESELLER & SETTINGS ================= */
+function addReseller(){
+  var name=$('rsName').value.trim();
+  if(!name){toast('err','Gagal','Nama reseller wajib diisi.');return}
+  var dup=false;
+  for(var i=0;i<resellers.length;i++){
+    if(resellers[i].name.toLowerCase()===name.toLowerCase()){dup=true;break}
+  }
+  if(dup){toast('err','Gagal','Reseller "'+esc(name)+'" sudah terdaftar.');return}
+  var quota=parseInt($('rsQuota').value,10)||30;
+  var days=parseInt($('rsDays').value,10)||30;
+  var saldo=parseInt($('rsSaldo').value,10)||0;
+  var prefix=($('rsPrefix').value||name.substring(0,2)).toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3)||'RS';
+  var user=name.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12);
+  var pass=genKey('').replace(/-/g,'').substring(0,8).toLowerCase();
+  resellers.push({name:name,quota:quota,sold:0,expires:Date.now()+days*864e5,prefix:prefix,user:user,pass:pass,saldo:saldo});
+  txns.unshift({time:new Date().toLocaleString('id-ID'),acc:'admin',type:'DAFTAR',
+    detail:'Reseller <b>'+esc(name)+'</b> dibuat (modal '+rupiah(saldo)+')',amount:0});
+  bump(); saveAll();
+  closeModal('mReseller');
+  $('rsName').value='';
+  $('rsPrefix').value='';
+  renderAll();
+  addLog('Reseller <b>'+esc(name)+'</b> terdaftar (akun: '+esc(user)+')','ok');
+  toast('ok','Reseller Ditambahkan',
+    esc(name)+'<br>login: <b class="keystr">'+esc(user)+'</b><br>pass: <b class="keystr">'+esc(pass)+'</b><br><small style="color:var(--mut)">Catat &amp; kirim ke reseller!</small>');
+}
+
+function delReseller(name){
+  if(!confirm('Hapus reseller '+name+'?'))return;
+  resellers=resellers.filter(function(r){return r.name!==name});
+  bump(); saveAll(); renderAll();
+  addLog('Reseller <b>'+esc(name)+'</b> dihapus','bad');
+  toast('warn','Dihapus',esc(name)+' dikeluarkan.');
+}
+function savePrice(){
+  var p=parseInt($('setPrice').value,10);
+  if(!p||p<100){toast('err','Gagal','Harga minimal Rp 100/hari.');return}
+  price=p;
+  saveAll(); renderAll();
+  toast('ok','Tersimpan','Harga key: '+rupiah(price)+'/hari.');
+}
+function resetData(){
+  if(!confirm('Reset SEMUA data demo?'))return;
+  var ks=['fg_keys','fg_res','fg_txn','fg_acts','fg_price'];
+  for(var i=0;i<ks.length;i++)localStorage.removeItem(ks[i]);
+  location.reload();
+}
+
+/* ================= MISC ================= */
+function tickClock(){
+  $('clock').textContent=new Date().toLocaleTimeString('id-ID',{hour12:false});
+}
+setInterval(tickClock,1000);
+tickClock();
+setInterval(function(){
+  var ch=false;
+  keys.forEach(function(k){
+    if(k.status==='active'&&k.expires<Date.now()){k.status='expired';ch=true}
+  });
+  if(ch){saveAll();renderAll()}
+},30000);
+updBulkCost();
+updCost();
+</script>
+</body>
+</html>
