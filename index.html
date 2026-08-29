@@ -516,7 +516,12 @@ async function api(path,options){
 async function loadOnline(){
   var d=await api('/api/settings',{method:'GET'}); price=Number(d.key_price_per_day||1000);
   keys=await api('/api/keys',{method:'GET'});
-  resellers=role==='admin'?await api('/api/resellers',{method:'GET'}):[];
+  if(role==='admin'){
+    resellers=await api('/api/resellers',{method:'GET'});
+  }else{
+    var me=await api('/api/resellers',{method:'GET'});
+    resellers=me?[me]:[];
+  }
   txns=await api('/api/transactions',{method:'GET'});
   logs=txns.slice(0,8).map(function(t){return {t:new Date(t.created_at).toLocaleString('id-ID'),m:esc(t.detail),c:t.amount>=0?'ok':'warn'}});
 }
