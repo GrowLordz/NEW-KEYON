@@ -53,6 +53,49 @@ create table if not exists public.transactions (
   created_at timestamptz not null default now()
 );
 
+-- Compatibility migrations for older installations.
+-- Run this whole schema after the production files are deployed.
+alter table public.settings add column if not exists updated_at timestamptz not null default now();
+
+alter table public.resellers add column if not exists id uuid default gen_random_uuid();
+alter table public.resellers add column if not exists name text default '';
+alter table public.resellers add column if not exists username text default '';
+alter table public.resellers add column if not exists password_hash text default '';
+alter table public.resellers add column if not exists quota integer not null default 0;
+alter table public.resellers add column if not exists sold integer not null default 0;
+alter table public.resellers add column if not exists expires_at timestamptz default now();
+alter table public.resellers add column if not exists prefix text not null default 'RS';
+alter table public.resellers add column if not exists balance bigint not null default 0;
+alter table public.resellers add column if not exists active boolean not null default true;
+alter table public.resellers add column if not exists created_at timestamptz not null default now();
+
+alter table public.keys add column if not exists id bigint generated always as identity;
+alter table public.keys add column if not exists key text default '';
+alter table public.keys add column if not exists owner text not null default '';
+alter table public.keys add column if not exists status text not null default 'active';
+alter table public.keys add column if not exists created_at timestamptz not null default now();
+alter table public.keys add column if not exists expires_at timestamptz default now();
+alter table public.keys add column if not exists uid text;
+alter table public.keys add column if not exists reseller text not null default '';
+alter table public.keys add column if not exists reseller_id uuid;
+alter table public.keys add column if not exists cost bigint not null default 0;
+alter table public.keys add column if not exists last_check_at timestamptz;
+alter table public.keys add column if not exists check_count bigint not null default 0;
+alter table public.keys add column if not exists device_limit integer not null default 1;
+alter table public.keys add column if not exists devices text[] not null default '{}';
+
+alter table public.transactions add column if not exists id bigint generated always as identity;
+alter table public.transactions add column if not exists reseller_id uuid;
+alter table public.transactions add column if not exists account text not null default '';
+alter table public.transactions add column if not exists type text not null default 'SYSTEM';
+alter table public.transactions add column if not exists detail text not null default '';
+alter table public.transactions add column if not exists amount bigint not null default 0;
+alter table public.transactions add column if not exists created_at timestamptz not null default now();
+
+update public.resellers set id=gen_random_uuid() where id is null;
+update public.resellers set expires_at=now()+interval '30 days' where expires_at is null;
+update public.keys set expires_at=now()+interval '30 days' where expires_at is null;
+
 -- Safe migrations for the earlier schema.
 alter table public.keys add column if not exists reseller_id uuid references public.resellers(id) on delete set null;
 alter table public.keys add column if not exists device_limit integer not null default 1;
