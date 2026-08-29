@@ -48,26 +48,12 @@ module.exports=async(req,res)=>{
     const out=await sb(`keys?id=eq.${k.id}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({status})});
     return json(res,200,out[0]);
   }
-  if (action === 'delete') {
-    // Admin may delete any key; reseller may delete only a key they own.
-    if (role !== 'admin') {
-      if (!user || !user.reseller_id) {
-        return res.status(403).json({ error: 'Forbidden' });
-      }
-      const { data: ownedKey, error: ownerErr } = await supabase
-        .from('keys')
-        .select('id, reseller_id')
-        .eq('key', key)
-        .eq('reseller_id', user.reseller_id)
-        .maybeSingle();
-      if (ownerErr) return res.status(500).json({ error: ownerErr.message });
-      if (!ownedKey) return res.status(404).json({ error: 'Key not found' });
-    }
-    const { error } = await supabase.from('keys').delete().eq('key', key);
-    if (error) return res.status(500).json({ error: error.message });
-    return res.status(200).json({ ok: true });
-  });
-    await sb(`keys?id=eq.${k.id}`,{method:'DELETE'}); return json(res,200,{ok:true});
+  if(action==='delete'){
+    // Admin: any key. Reseller: only keys owned by that reseller.
+    if(s.role!=='admin' && !(s.role==='reseller' && k.reseller_id===s.reseller_id))
+      return json(res,403,{error:'forbidden'});
+    await sb(`keys?id=eq.${k.id}`,{method:'DELETE'});
+    return json(res,200,{ok:true});
   }
   if(action==='reset-devices'||action==='reset_devices'){
     const out=await sb(`keys?id=eq.${k.id}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({devices:[],uid:null})});
