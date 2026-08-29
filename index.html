@@ -514,10 +514,16 @@ async function api(path,options){
   return data;
 }
 async function loadOnline(){
-  var d=await api('/api/settings',{method:'GET'}); price=Number(d.key_price_per_day||1000);
-  keys=await api('/api/keys',{method:'GET'});
-  resellers=role==='admin'?await api('/api/resellers',{method:'GET'}):[];
-  txns=await api('/api/transactions',{method:'GET'});
+  var d;
+  try{d=await api('/api/settings',{method:'GET'});}
+  catch(e){e.endpoint='/api/settings';throw e;}
+  price=Number(d.key_price_per_day||1000);
+  try{keys=await api('/api/keys',{method:'GET'});}
+  catch(e){e.endpoint='/api/keys';throw e;}
+  try{resellers=await api('/api/resellers',{method:'GET'}); if(!Array.isArray(resellers))resellers=resellers?[resellers]:[];}
+  catch(e){e.endpoint='/api/resellers';throw e;}
+  try{txns=await api('/api/transactions',{method:'GET'});}
+  catch(e){e.endpoint='/api/transactions';throw e;}
   logs=txns.slice(0,8).map(function(t){return {t:new Date(t.created_at).toLocaleString('id-ID'),m:esc(t.detail),c:t.amount>=0?'ok':'warn'}});
 }
 function normalize(){
@@ -601,7 +607,7 @@ async function boot(){
     },500);
   }catch(e){
     $('boot').classList.remove('on');$('loginScreen').classList.remove('hide');$('sweep').classList.remove('go');
-    $('loginErr').textContent='✕ DATABASE ERROR — '+esc(e.message);sessionStorage.clear();
+    $('loginErr').textContent='✕ DATABASE ERROR — '+esc((e.endpoint?e.endpoint+' — ':'')+e.message);sessionStorage.clear();
   }
 }
 function setupRole(){
@@ -723,7 +729,7 @@ async function revokeKey(key){
   catch(e){toast('err','Gagal',esc(e.message))}
 }
 async function deleteKey(key){
-  if(role!=='admin')return toast('err','Ditolak','Hanya admin.');
+  if(role!=='admin'&&role!=='reseller')return toast('err','Ditolak','Akses ditolak.');
   if(!confirm('Hapus '+key+' dari registry?'))return;
   try{await api('/api/keys',{method:'POST',body:JSON.stringify({action:'delete',key:key})});bump();await loadOnline();normalize();renderAll();toast('warn','Terhapus',esc(key))}
   catch(e){toast('err','Gagal',esc(e.message))}
