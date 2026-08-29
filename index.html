@@ -216,7 +216,7 @@ tbody tr:hover{background:var(--panel2)}
         <input class="f-input" id="liPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
         <div id="loginErr"></div>
         <button class="btn btn-org btn-block" onclick="doLogin()"><span>▶ Unlock Panel</span></button>
-        <p class="demo">admin: <b>admin / forge123</b> · reseller: <b>novastore / nova123</b></p>
+        <p class="demo">admin: <b>gunakan PANEL_ADMIN_TOKEN</b> · reseller: <b>akun dari Admin</b></p>
       </div>
       <div class="sweep" id="sweep"></div>
     </div>
@@ -478,596 +478,343 @@ tbody tr:hover{background:var(--panel2)}
 <div id="toasts"></div>
 
 <script>
-/* ================= STATE ================= */
-var resellers = JSON.parse(localStorage.getItem('fg_res')||'null') || [
-  {name:'NovaStore', quota:50, sold:12, expires:Date.now()+45*864e5, prefix:'NS', user:'novastore', pass:'nova123', saldo:150000},
-  {name:'DarkShop',  quota:40, sold:38, expires:Date.now()+5*864e5,  prefix:'DS', user:'darkshop',  pass:'dark123',  saldo:25000},
-  {name:'ZenMarket', quota:30, sold:7,  expires:Date.now()-2*864e5,  prefix:'ZM', user:'zenmarket', pass:'zen123',   saldo:0}
-];
-var keys = JSON.parse(localStorage.getItem('fg_keys')||'null') || seed();
-var txns = JSON.parse(localStorage.getItem('fg_txn')||'null') || [];
-var price = parseInt(localStorage.getItem('fg_price')||'1000',10);
-var logs = [
-  {t:'2 mnt', m:'Key <b>FG-X7Q2-9MZB</b> dipakai <b>putri_dev</b>', c:'ok'},
-  {t:'1 jam', m:'Key <b>FG-A1B2-C3D4</b> diblokir manual', c:'bad'},
-  {t:'3 jam', m:'Reseller <b>DarkShop</b> top up Rp 50.000', c:'warn'}
-];
-var role='admin', myName='', myUser='', extendTarget=null;
-var actionCount = parseInt(localStorage.getItem('fg_acts')||'0',10);
+/* ================= FORGE/OS ONLINE STATE ================= */
+var resellers=[], keys=[], txns=[], logs=[];
+var price=1000, role='', myName='', myUser='', sessionToken='', extendTarget=null;
+var actionCount=0;
 
-function saveAll(){
-  localStorage.setItem('fg_keys',JSON.stringify(keys));
-  localStorage.setItem('fg_res',JSON.stringify(resellers));
-  localStorage.setItem('fg_txn',JSON.stringify(txns));
-  localStorage.setItem('fg_acts',String(actionCount));
-  localStorage.setItem('fg_price',String(price));
-}
-function seed(){
-  var now=Date.now(), d=864e5;
-  return [
-    {key:'FG-A1B2-C3D4', owner:'rizky_gaming', status:'blocked', created:now-20*d, expires:now+10*d, reseller:'NovaStore', cost:20000},
-    {key:'FG-X7Q2-9MZB', owner:'putri_dev',    status:'active',  created:now-5*d,  expires:now+25*d, reseller:'',          cost:0},
-    {key:'FG-L0P9-K8J7', owner:'andrei.id',    status:'active',  created:now-2*d,  expires:now+4*d,  reseller:'DarkShop',  cost:12000},
-    {key:'FG-T5R4-E3W2', owner:'bagusx',       status:'revoked', created:now-40*d, expires:now+2*d,  reseller:'',          cost:0},
-    {key:'FG-M1N0-B9V8', owner:'citra_art',    status:'expired', created:now-35*d, expires:now-1*d,  reseller:'ZenMarket', cost:30000},
-    {key:'FG-Q6W7-X8Y9', owner:'fahmi_ml',     status:'active',  created:now-12*d, expires:now+18*d, reseller:'NovaStore', cost:5000}
-  ];
-}
-
-/* ================= HELPERS ================= */
 function $(id){return document.getElementById(id)}
 function fmt(ts){return new Date(ts).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'})}
-function rupiah(n){return 'Rp '+Number(n).toLocaleString('id-ID')}
-function daysLeft(ts){return Math.ceil((ts-Date.now())/864e5)}
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function rupiah(n){return 'Rp '+Number(n||0).toLocaleString('id-ID')}
+function daysLeft(ts){return Math.ceil((new Date(ts).getTime()-Date.now())/864e5)}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function genKey(pre){
-  pre=pre||'FG';
-  var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  pre=pre||'FG';var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   function seg(n){var r='';for(var i=0;i<n;i++)r+=c[Math.floor(Math.random()*c.length)];return r}
   return pre+'-'+seg(4)+'-'+seg(4);
 }
-function mySaldo(){
-  if(role==='admin') return 999999999;
-  for(var i=0;i<resellers.length;i++) if(resellers[i].name===myName) return resellers[i].saldo;
-  return 0;
-}
-function setSaldo(name,val){
-  for(var i=0;i<resellers.length;i++) if(resellers[i].name===name) resellers[i].saldo=val;
-}
-function getReseller(name){
-  for(var i=0;i<resellers.length;i++) if(resellers[i].name===name) return resellers[i];
-  return null;
-}
-function addTxn(type,detail,amount){
-  txns.unshift({time:new Date().toLocaleString('id-ID'),acc:(role==='admin'?'admin':myName),type:type,detail:detail,amount:amount});
-}
 function toast(type,title,msg){
-  var t=document.createElement('div');
-  t.className='toast '+(type||'');
-  t.innerHTML='<b>'+title+'</b>'+msg;
-  $('toasts').appendChild(t);
+  var t=document.createElement('div');t.className='toast '+(type||'');
+  t.innerHTML='<b>'+title+'</b>'+msg;$('toasts').appendChild(t);
   setTimeout(function(){t.classList.add('out');setTimeout(function(){t.remove()},250)},4000);
 }
-function addLog(m,c){logs.unshift({t:'now',m:m,c:c||''});renderLogs()}
-function bump(){actionCount++}
-
-/* RIPPLE efek renyah tiap klik */
-document.addEventListener('click',function(e){
-  var r=document.createElement('div');
-  r.className='ripple-dot';
-  r.style.left=e.clientX+'px';
-  r.style.top=e.clientY+'px';
-  document.body.appendChild(r);
-  setTimeout(function(){r.remove()},520);
-});
-
-/* ================= LOGIN ================= */
-var greetings=['> secure channel established…','> handshake JKT-04 ok…','> identify yourself, operator…','> awaiting credentials…'];
-var gIdx=0;
-function typeGreet(){
-  var el=$('loginSub'), text=greetings[gIdx%greetings.length];
-  gIdx++;
-  el.textContent='';
-  var i=0;
-  var iv=setInterval(function(){
-    el.textContent=text.substring(0,++i);
-    if(i>=text.length)clearInterval(iv);
-  },28);
+function addLog(m,c){
+  logs.unshift({t:'now',m:m,c:c||''});renderLogs();
 }
-typeGreet();
-setInterval(typeGreet,5000);
+function bump(){actionCount++;sessionStorage.setItem('fg_acts',String(actionCount))}
+function tokenHeaders(){
+  return sessionToken?{'Authorization':'Bearer '+sessionToken}:{};
+}
+async function api(path,options){
+  var o=Object.assign({credentials:'same-origin'},options||{});
+  o.headers=Object.assign({'Content-Type':'application/json'},tokenHeaders(),o.headers||{});
+  var r=await fetch(path,o), data=null;
+  try{data=await r.json()}catch(_){}
+  if(!r.ok){var e=new Error((data&&data.message)||(data&&data.error)||('HTTP '+r.status));e.status=r.status;e.data=data;throw e}
+  return data;
+}
+async function loadOnline(){
+  var d=await api('/api/settings',{method:'GET'}); price=Number(d.key_price_per_day||1000);
+  keys=await api('/api/keys',{method:'GET'});
+  resellers=role==='admin'?await api('/api/resellers',{method:'GET'}):[];
+  txns=await api('/api/transactions',{method:'GET'});
+  logs=txns.slice(0,8).map(function(t){return {t:new Date(t.created_at).toLocaleString('id-ID'),m:esc(t.detail),c:t.amount>=0?'ok':'warn'}});
+}
+function normalize(){
+  keys.forEach(function(k){
+    k.created=new Date(k.created_at||k.created).getTime();
+    k.expires=new Date(k.expires_at||k.expires).getTime();
+    k.device_limit=Number(k.device_limit??1);
+    k.devices=Array.isArray(k.devices)?k.devices:[];
+  });
+  resellers.forEach(function(r){
+    r.expires=new Date(r.expires_at||r.expires).getTime();
+    r.saldo=Number(r.balance??r.saldo??0);
+  });
+}
+function mySaldo(){
+  if(role==='admin')return 999999999;
+  var r=getReseller(myName);return r?Number(r.saldo||0):0;
+}
+function getReseller(name){return resellers.find(function(r){return r.name===name})||null}
+function addDeviceControl(){
+  if($('crDeviceLimit'))return;
+  var cost=$('crCost')?.parentElement;
+  if(!cost)return;
+  var wrap=document.createElement('div');
+  wrap.innerHTML='<label class="f-label" style="margin-top:1rem">Device Limit <small style="color:var(--mut)">(0 = unlimited)</small></label><input class="f-input" id="crDeviceLimit" type="number" min="0" max="1000" value="1">';
+  cost.parentElement.insertBefore(wrap,cost);
+}
+function typeGreet(){
+  var greetings=['> secure channel established…','> handshake JKT-04 ok…','> identify yourself, operator…','> awaiting credentials…'];
+  var text=greetings[(window.__gIdx=(window.__gIdx||0)+1)%greetings.length],el=$('loginSub');el.textContent='';var i=0;
+  clearInterval(window.__gIv);window.__gIv=setInterval(function(){el.textContent=text.substring(0,++i);if(i>=text.length)clearInterval(window.__gIv)},28);
+}
+typeGreet();setInterval(typeGreet,5000);
 
 var lb=$('loginBox');
 lb.addEventListener('mousemove',function(e){
-  var r=lb.getBoundingClientRect();
-  var x=(e.clientX-r.left)/r.width-.5;
-  var y=(e.clientY-r.top)/r.height-.5;
+  var r=lb.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
   lb.style.transform='perspective(800px) rotateY('+(x*8)+'deg) rotateX('+(-y*8)+'deg)';
   lb.querySelector('.login-glow').style.left=(x*80)+'%';
 });
-lb.addEventListener('mouseleave',function(){ lb.style.transform='none' });
+lb.addEventListener('mouseleave',function(){lb.style.transform='none'});
 
-function doLogin(){
-  var u=$('liUser').value.trim().toLowerCase();
-  var p=$('liPass').value;
-  if(u==='admin'&&p==='forge123'){
-    role='admin'; myName=''; myUser='admin';
+async function doLogin(){
+  var u=$('liUser').value.trim().toLowerCase(),p=$('liPass').value;
+  if(!u||!p){$('loginErr').textContent='✕ USERNAME DAN PASSCODE WAJIB DIISI.';return}
+  $('loginErr').textContent='> authenticating…';
+  try{
+    var r=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    var d=await r.json();
+    if(!r.ok)throw new Error(d.message||'Kredensial ditolak.');
+    sessionToken=d.token;role=d.role;myName=d.name||'';myUser=d.username||u;
+    sessionStorage.setItem('fg_token',sessionToken);sessionStorage.setItem('fg_role',role);
     loginSuccess();
-    return;
+  }catch(e){
+    $('loginErr').textContent='✕ ACCESS DENIED — '+esc(e.message);
+    lb.classList.remove('shake');void lb.offsetWidth;lb.classList.add('shake');
   }
-  for(var i=0;i<resellers.length;i++){
-    if(resellers[i].user===u&&resellers[i].pass===p){
-      role='reseller';
-      myName=resellers[i].name;
-      myUser=resellers[i].user;
-      loginSuccess();
-      return;
-    }
-  }
-  $('loginErr').textContent='✕ ACCESS DENIED — kredensial ditolak.';
-  lb.classList.remove('shake');
-  void lb.offsetWidth;
-  lb.classList.add('shake');
 }
 function loginSuccess(){
-  $('loginErr').textContent='';
-  $('sweep').classList.add('go');
-  setTimeout(function(){
-    $('loginScreen').classList.add('hide');
-    boot();
-  },600);
+  $('loginErr').textContent='';$('sweep').classList.add('go');
+  setTimeout(function(){$('loginScreen').classList.add('hide');boot()},600);
 }
-function boot(){
-  var lines=[
-    '&gt; FORGE/OS kernel v4.0 ......... <span class="ok">[LOADED]</span>',
-    '&gt; verify license ............... <span class="ok">[VALID]</span>',
-    '&gt; auth role .................... <span class="ok">['+role.toUpperCase()+']</span>',
-    '&gt; load registry ................ <span class="ok">['+keys.length+' keys]</span>',
-    '&gt; wallet sync .................. <span class="ok">['+rupiah(mySaldo())+']</span>',
-    '<div class="big">■ PANEL UNLOCKED — WELCOME '+myUser.toUpperCase()+'</div>'
-  ];
-  $('boot').classList.add('on');
-  var i=0;
-  var iv=setInterval(function(){
-    $('bootLog').innerHTML+=lines[i]+'<br>';
-    i++;
-    if(i>=lines.length){
-      clearInterval(iv);
-      setTimeout(function(){
-        $('boot').classList.remove('on');
-        $('app').classList.add('on');
-        setupRole();
-        renderAll();
-        toast('ok','Online','Selamat datang, '+esc(myUser)+'. Saldo: '+rupiah(mySaldo()));
-      },800);
-    }
-  },320);
-}
-function setupRole(){
-  $('roleChip').textContent=role.toUpperCase();
-  $('whoami').textContent=myUser;
-  if(role==='reseller'){
-    var b=document.querySelector('.nav button[data-view="reseller"]');
-    if(b)b.style.display='none';
-    go('keys');
-  }else{
-    go('dashboard');
+async function boot(){
+  try{
+    $('bootLog').innerHTML='';
+    var lines=[
+      '&gt; FORGE/OS kernel v4.0 ......... <span class="ok">[LOADED]</span>',
+      '&gt; verify license ............... <span class="ok">[VALID]</span>',
+      '&gt; auth role .................... <span class="ok">['+role.toUpperCase()+']</span>',
+      '&gt; sync registry ................ <span class="ok">[CONNECTING]</span>',
+      '&gt; wallet sync .................. <span class="ok">[CONNECTING]</span>'
+    ];
+    $('boot').classList.add('on');
+    for(var i=0;i<lines.length;i++){await new Promise(function(r){setTimeout(r,220)});$('bootLog').innerHTML+=lines[i]+'<br>'}
+    await loadOnline();normalize();
+    $('bootLog').innerHTML+='&gt; database ..................... <span class="ok">[ONLINE]</span><br>';
+    $('bootLog').innerHTML+='<div class="big">■ PANEL UNLOCKED — WELCOME '+esc(myUser.toUpperCase())+'</div>';
+    setTimeout(function(){
+      $('boot').classList.remove('on');$('app').classList.add('on');setupRole();renderAll();
+      toast('ok','Online','Selamat datang, '+esc(myUser)+'. Saldo: '+rupiah(mySaldo()));
+    },500);
+  }catch(e){
+    $('boot').classList.remove('on');$('loginScreen').classList.remove('hide');$('sweep').classList.remove('go');
+    $('loginErr').textContent='✕ DATABASE ERROR — '+esc(e.message);sessionStorage.clear();
   }
 }
+function setupRole(){
+  $('roleChip').textContent=role.toUpperCase();$('whoami').textContent=myUser;
+  var rb=document.querySelector('.nav button[data-view="reseller"]');
+  if(rb)rb.style.display=role==='reseller'?'none':'';
+  go(role==='reseller'?'keys':'dashboard');
+}
 function logout(){
-  $('app').classList.remove('on');
-  $('loginScreen').classList.remove('hide');
-  $('liPass').value='';
-  $('sweep').classList.remove('go');
-  typeGreet();
+  sessionToken='';role='';myName='';myUser='';keys=[];resellers=[];txns=[];
+  sessionStorage.clear();$('app').classList.remove('on');$('loginScreen').classList.remove('hide');
+  $('liPass').value='';$('sweep').classList.remove('go');typeGreet();
 }
 
 /* ================= NAV ================= */
-var meta={
-  dashboard:['CONTROL <i>ROOM</i>','FORGE/OS // CONTROL'],
-  keys:['KEY <i>REGISTRY</i>','FORGE/OS // DATABASE'],
-  wallet:['SALDO <i>& TOP UP</i>','FORGE/OS // FINANCE'],
-  bulk:['BATCH <i>FORGE</i>','FORGE/OS // MASS PRODUCTION'],
-  expiry:['EXPIRY <i>RADAR</i>','FORGE/OS // MONITORING'],
-  reseller:['RESELLER <i>HUB</i>','FORGE/OS // PARTNERS'],
-  txn:['TRANS<i>AKSI</i>','FORGE/OS // LEDGER'],
-  profile:['PRO<i>FILE</i>','FORGE/OS // OPERATOR']
-};
+var meta={dashboard:['CONTROL <i>ROOM</i>','FORGE/OS // CONTROL'],keys:['KEY <i>REGISTRY</i>','FORGE/OS // DATABASE'],wallet:['SALDO <i>& TOP UP</i>','FORGE/OS // FINANCE'],bulk:['BATCH <i>FORGE</i>','FORGE/OS // MASS PRODUCTION'],expiry:['EXPIRY <i>RADAR</i>','FORGE/OS // MONITORING'],reseller:['RESELLER <i>HUB</i>','FORGE/OS // PARTNERS'],txn:['TRANS<i>AKSI</i>','FORGE/OS // LEDGER'],profile:['PRO<i>FILE</i>','FORGE/OS // OPERATOR']};
 function go(v){
-  var all=['dashboard','keys','wallet','bulk','expiry','reseller','txn','profile'];
-  var btns=document.querySelectorAll('.nav button');
-  for(var i=0;i<btns.length;i++) btns[i].classList.toggle('active',btns[i].getAttribute('data-view')===v);
-  for(var j=0;j<all.length;j++) $('v-'+all[j]).style.display=(all[j]===v?'':'none');
-  $('viewTitle').innerHTML=meta[v][0];
-  $('crumb').textContent=meta[v][1];
-  $('sidebar').classList.remove('open');
+  if(role==='reseller'&&v==='reseller')return;
+  var all=['dashboard','keys','wallet','bulk','expiry','reseller','txn','profile'],btns=document.querySelectorAll('.nav button');
+  for(var i=0;i<btns.length;i++)btns[i].classList.toggle('active',btns[i].getAttribute('data-view')===v);
+  for(var j=0;j<all.length;j++)$('v-'+all[j]).style.display=all[j]===v?'':'none';
+  $('viewTitle').innerHTML=meta[v][0];$('crumb').textContent=meta[v][1];$('sidebar').classList.remove('open');
 }
 
 /* ================= RENDER ================= */
 function renderAll(){
-  renderStats(); renderKeys(); renderExpiry(); renderResellers();
-  renderTxns(); fillSelects(); renderSaldo(); renderLogs();
-  $('actCount').textContent=actionCount;
-  $('pfUser').textContent=myUser;
-  $('pfRole').textContent=role.toUpperCase();
-  $('lastLogin').textContent=new Date().toLocaleString('id-ID');
-  $('pfPrice').textContent=rupiah(price)+'/hari';
-  $('dashPrice').textContent=rupiah(price);
-  $('setPrice').value=price;
-  if(role==='reseller'){ $('panelTransfer').style.display='none'; }
+  renderStats();renderKeys();renderExpiry();renderResellers();renderTxns();fillSelects();renderSaldo();renderLogs();
+  $('actCount').textContent=actionCount;$('pfUser').textContent=myUser;$('pfRole').textContent=role.toUpperCase();
+  $('lastLogin').textContent=new Date().toLocaleString('id-ID');$('pfPrice').textContent=rupiah(price)+'/hari';$('dashPrice').textContent=rupiah(price);$('setPrice').value=price;
+  if(role==='reseller')$('panelTransfer').style.display='none';
 }
 function renderSaldo(){
-  var s=mySaldo();
-  $('sideSaldo').textContent=rupiah(s);
-  $('dashSaldo').textContent=rupiah(s);
-  $('walletSaldo').textContent=rupiah(s);
-  $('walletRole').textContent=role==='admin'?'Admin — saldo tak terbatas':'Reseller: '+esc(myName);
-  $('crSaldo').textContent=rupiah(s);
+  var s=mySaldo();$('sideSaldo').textContent=rupiah(s);$('dashSaldo').textContent=rupiah(s);$('walletSaldo').textContent=rupiah(s);
+  $('walletRole').textContent=role==='admin'?'Admin — saldo tak terbatas':'Reseller: '+esc(myName);$('crSaldo').textContent=rupiah(s);
 }
 function renderStats(){
-  var list=keys.filter(function(k){return role==='admin'||k.reseller===myName});
-  var act=0,blk=0,exp=0;
-  list.forEach(function(k){
-    if(k.status==='active'&&k.expires>Date.now())act++;
-    if(k.status==='blocked'||k.status==='revoked')blk++;
-    if(k.status==='active'&&daysLeft(k.expires)<=7&&daysLeft(k.expires)>=0)exp++;
-  });
-  $('stTotal').textContent=list.length;
-  $('stActive').textContent=act;
-  $('stBlocked').textContent=blk;
-  $('stExpiring').textContent=exp;
-  var t=Math.max(1,list.length);
-  $('barActive').style.width=(act/t*100)+'%';
-  $('barBlocked').style.width=(blk/t*100)+'%';
-  $('barExp').style.width=(exp/t*100)+'%';
+  var list=keys,act=0,blk=0,exp=0;
+  list.forEach(function(k){if(k.status==='active'&&k.expires>Date.now())act++;if(k.status==='blocked'||k.status==='revoked')blk++;if(k.status==='active'&&daysLeft(k.expires)<=7&&daysLeft(k.expires)>=0)exp++});
+  $('stTotal').textContent=list.length;$('stActive').textContent=act;$('stBlocked').textContent=blk;$('stExpiring').textContent=exp;
+  var t=Math.max(1,list.length);$('barActive').style.width=act/t*100+'%';$('barBlocked').style.width=blk/t*100+'%';$('barExp').style.width=exp/t*100+'%';
 }
 var badgeMap={active:'b-active',blocked:'b-blocked',revoked:'b-revoked',expired:'b-expired'};
 function renderKeys(){
-  var q=($('search').value||'').toLowerCase();
-  var list=keys.filter(function(k){
-    if(role==='reseller'&&k.reseller!==myName)return false;
-    return k.key.toLowerCase().indexOf(q)>-1||k.owner.toLowerCase().indexOf(q)>-1;
-  });
-  var html='';
+  var q=($('search').value||'').toLowerCase(),list=keys.filter(function(k){return k.key.toLowerCase().indexOf(q)>-1||String(k.owner).toLowerCase().indexOf(q)>-1}),html='';
   list.forEach(function(k,i){
-    html+='<tr style="animation-delay:'+(i*0.03)+'s">'
-      +'<td class="keystr">'+esc(k.key)+'</td>'
-      +'<td>'+esc(k.owner)+'</td>'
-      +'<td><span class="badge '+(badgeMap[k.status]||'')+'">'+k.status+'</span></td>'
-      +'<td style="color:var(--mut)">'+fmt(k.created)+'</td>'
-      +'<td style="color:var(--mut)">'+fmt(k.expires)+'</td>'
-      +'<td>'+(k.reseller?esc(k.reseller):'—')+'</td>'
-      +'<td>'+(k.cost?rupiah(k.cost):'—')+'</td>'
-      +'<td><div class="row-acts">'
-      +'<button class="mini" onclick="openExtend(\''+k.key+'\')">◔+</button>'
-      +'<button class="mini" onclick="blockKey(\''+k.key+'\')">⊘</button>'
-      +'<button class="mini" onclick="revokeKey(\''+k.key+'\')">⌫</button>'
-      +'<button class="mini danger" onclick="deleteKey(\''+k.key+'\')">✕</button>'
-      +'</div></td></tr>';
+    var device=Number(k.device_limit)===0?'∞':(Array.isArray(k.devices)?k.devices.length:0)+'/'+Number(k.device_limit);
+    html+='<tr style="animation-delay:'+(i*.03)+'s"><td class="keystr">'+esc(k.key)+'</td><td>'+esc(k.owner)+'</td><td><span class="badge '+(badgeMap[k.status]||'')+'">'+esc(k.status)+'</span></td><td style="color:var(--mut)">'+fmt(k.created)+'</td><td style="color:var(--mut)">'+fmt(k.expires)+'</td><td>'+(k.reseller?esc(k.reseller):'—')+'</td><td title="Devices">'+esc(device)+'</td><td>'+(k.cost?rupiah(k.cost):'—')+'</td><td><div class="row-acts">'+
+    '<button class="mini" onclick="openExtend(\''+esc(k.key)+'\')">◔+</button><button class="mini" onclick="blockKey(\''+esc(k.key)+'\')">⊘</button><button class="mini" onclick="revokeKey(\''+esc(k.key)+'\')">⌫</button>'+
+    '<button class="mini" title="Device Limit" onclick="setDeviceLimit(\''+esc(k.key)+'\')">D</button><button class="mini" title="Reset Devices" onclick="resetDevices(\''+esc(k.key)+'\')">↻D</button>'+
+    '<button class="mini danger" onclick="deleteKey(\''+esc(k.key)+'\')">✕</button></div></td></tr>';
   });
   $('keyBody').innerHTML=html||'<tr><td colspan="8" class="empty">Registry kosong.</td></tr>';
 }
 function renderLogs(){
   var cls={ok:'--ok',bad:'--bad',warn:'--warn'};
-  $('logBody').innerHTML=logs.slice(0,8).map(function(l){
-    return '<tr><td style="color:var(--mut);width:70px">'+l.t+'</td>'
-      +'<td style="'+(cls[l.c]?'color:var'+cls[l.c]:'')+'">'+l.m+'</td></tr>';
-  }).join('');
+  $('logBody').innerHTML=logs.slice(0,8).map(function(l){return '<tr><td style="color:var(--mut);width:70px">'+esc(l.t)+'</td><td style="'+(cls[l.c]?'color:var'+cls[l.c]:'')+'">'+l.m+'</td></tr>'}).join('');
 }
 function renderExpiry(){
-  var list=keys.filter(function(k){
-    if(role==='reseller'&&k.reseller!==myName)return false;
-    return k.status!=='revoked';
-  }).sort(function(a,b){return a.expires-b.expires});
-  var html='';
-  list.forEach(function(k){
-    var total=Math.max(1,k.expires-k.created);
-    var used=Math.min(100,Math.max(0,(Date.now()-k.created)/total*100));
-    var dl=daysLeft(k.expires);
-    var c=dl<0?'c-bad':(dl<=7?'c-warn':'c-ok');
-    var sisa=dl<0?('EXPIRED '+(-dl)+' hr lalu'):(dl+' hari');
-    var bar=dl<0?'bg-bad':(dl<=7?'bg-warn':'bg-ok');
-    html+='<tr><td class="keystr">'+esc(k.key)+'</td><td>'+esc(k.owner)+'</td>'
-      +'<td style="color:var(--mut)">'+fmt(k.expires)+'</td>'
-      +'<td class="'+c+'">'+sisa+'</td>'
-      +'<td style="min-width:120px"><div class="xbar"><i class="'+bar+'" style="width:'+used+'%"></i></div></td>'
-      +'<td><button class="mini" onclick="openExtend(\''+k.key+'\')">◔+</button></td></tr>';
-  });
+  var list=keys.filter(function(k){return k.status!=='revoked'}).sort(function(a,b){return a.expires-b.expires}),html='';
+  list.forEach(function(k){var total=Math.max(1,k.expires-k.created),used=Math.min(100,Math.max(0,(Date.now()-k.created)/total*100)),dl=daysLeft(k.expires),c=dl<0?'c-bad':dl<=7?'c-warn':'c-ok',sisa=dl<0?'EXPIRED '+(-dl)+' hari lalu':dl+' hari',bar=dl<0?'bg-bad':dl<=7?'bg-warn':'bg-ok';
+    html+='<tr><td class="keystr">'+esc(k.key)+'</td><td>'+esc(k.owner)+'</td><td style="color:var(--mut)">'+fmt(k.expires)+'</td><td class="'+c+'">'+sisa+'</td><td style="min-width:120px"><div class="xbar"><i class="'+bar+'" style="width:'+used+'%"></i></div></td><td><button class="mini" onclick="openExtend(\''+esc(k.key)+'\')">◔+</button></td></tr>'});
   $('expBody').innerHTML=html||'<tr><td colspan="6" class="empty">Tidak ada key.</td></tr>';
 }
 function renderResellers(){
   if(role!=='admin')return;
-  var html='';
-  resellers.forEach(function(r,i){
-    var dl=Math.ceil((r.expires-Date.now())/864e5);
-    var pct=Math.min(100,r.sold/Math.max(1,r.quota)*100);
-    html+='<tr style="animation-delay:'+(i*0.05)+'s">'
-      +'<td><b>'+esc(r.name)+'</b><br><small style="color:var(--mut)">login: '+esc(r.user)+' · prefix: '+esc(r.prefix)+'</small></td>'
-      +'<td class="'+(r.saldo<20000?'c-bad':'c-ok')+'">'+rupiah(r.saldo)+'</td>'
-      +'<td>'+r.sold+' / '+r.quota+'<div class="xbar" style="margin-top:.4rem"><i class="'+(pct>=90?'bg-bad':'bg-org')+'" style="width:'+pct+'%"></i></div></td>'
-      +'<td style="color:var(--mut)">'+fmt(r.expires)+'<br><small>'+(dl<0?'KEDALUWARSA':dl+' hr lagi')+'</small></td>'
-      +'<td><div class="row-acts">'
-      +'<button class="mini" onclick="topupReseller(\''+esc(r.name)+'\')">◉ Top Up</button>'
-      +'<button class="mini" onclick="resetPass(\''+esc(r.name)+'\')">🔑</button>'
-      +'<button class="mini danger" onclick="delReseller(\''+esc(r.name)+'\')">✕</button>'
-      +'</div></td></tr>';
-  });
+  var html='';resellers.forEach(function(r,i){var dl=Math.ceil((r.expires-Date.now())/864e5),pct=Math.min(100,r.sold/Math.max(1,r.quota)*100);
+    html+='<tr style="animation-delay:'+(i*.05)+'s"><td><b>'+esc(r.name)+'</b><br><small style="color:var(--mut)">login: '+esc(r.username)+' · prefix: '+esc(r.prefix)+'</small></td><td class="'+(r.saldo<20000?'c-bad':'c-ok')+'">'+rupiah(r.saldo)+'</td><td>'+r.sold+' / '+(r.quota||'∞')+'<div class="xbar" style="margin-top:.4rem"><i class="'+(pct>=90?'bg-bad':'bg-org')+'" style="width:'+pct+'%"></i></div></td><td style="color:var(--mut)">'+fmt(r.expires)+'<br><small>'+(dl<0?'KEDALUWARSA':dl+' hari lagi')+'</small></td><td><div class="row-acts"><button class="mini" onclick="topupReseller(\''+esc(r.id)+'\',\''+esc(r.name)+'\')">◉ Top Up</button><button class="mini" onclick="resetPass(\''+esc(r.id)+'\',\''+esc(r.name)+'\')">🔑</button><button class="mini danger" onclick="delReseller(\''+esc(r.id)+'\',\''+esc(r.name)+'\')">✕</button></div></td></tr>'});
   $('resBody').innerHTML=html||'<tr><td colspan="5" class="empty">Belum ada reseller.</td></tr>';
 }
 function renderTxns(){
-  var list=txns.filter(function(t){return role==='admin'||t.acc===myName});
-  var html='';
-  list.forEach(function(t){
-    var c=t.amount>0?'c-ok':'c-bad';
-    html+='<tr><td style="color:var(--mut)">'+t.time+'</td><td>'+esc(t.acc)+'</td>'
-      +'<td>'+esc(t.type)+'</td><td>'+t.detail+'</td>'
-      +'<td class="'+c+'">'+(t.amount>0?'+':'')+rupiah(t.amount)+'</td></tr>';
-  });
+  var html='';txns.forEach(function(t){var c=t.amount>0?'c-ok':'c-bad';html+='<tr><td style="color:var(--mut)">'+fmt(t.created_at)+'</td><td>'+esc(t.account)+'</td><td>'+esc(t.type)+'</td><td>'+esc(t.detail)+'</td><td class="'+c+'">'+(t.amount>0?'+':'')+rupiah(t.amount)+'</td></tr>'});
   $('txnBody').innerHTML=html||'<tr><td colspan="5" class="empty">Belum ada transaksi.</td></tr>';
-  var mini='';
-  list.slice(0,5).forEach(function(t){
-    var c=t.amount>0?'c-ok':'c-bad';
-    mini+='<tr><td style="color:var(--mut)">'+t.time+'</td><td>'+esc(t.type)+'</td>'
-      +'<td>'+t.detail+'</td><td class="'+c+'">'+(t.amount>0?'+':'')+rupiah(t.amount)+'</td></tr>';
-  });
-  $('txnMini').innerHTML=mini||'<tr><td colspan="4" class="empty">Kosong.</td></tr>';
+  $('txnMini').innerHTML=txns.slice(0,5).map(function(t){var c=t.amount>0?'c-ok':'c-bad';return '<tr><td style="color:var(--mut)">'+fmt(t.created_at)+'</td><td>'+esc(t.type)+'</td><td>'+esc(t.detail)+'</td><td class="'+c+'">'+(t.amount>0?'+':'')+rupiah(t.amount)+'</td></tr>'}).join('')||'<tr><td colspan="4" class="empty">Kosong.</td></tr>';
 }
 function fillSelects(){
   var opts='<option value="">— internal —</option>';
   resellers.forEach(function(r){opts+='<option>'+esc(r.name)+'</option>'});
-  $('crReseller').innerHTML=opts;
-  var tr='';
-  resellers.forEach(function(r){tr+='<option>'+esc(r.name)+'</option>'});
-  $('trTo').innerHTML=tr;
+  if($('crReseller'))$('crReseller').innerHTML=opts;
+  var tr='';resellers.forEach(function(r){tr+='<option value="'+esc(r.id)+'">'+esc(r.name)+'</option>'});
+  if($('trTo'))$('trTo').innerHTML=tr;
   fillPrefix();
 }
-function fillPrefix(){
-  var rs=$('crReseller').value, pre='FG';
-  resellers.forEach(function(r){if(r.name===rs)pre=r.prefix});
-  $('crReseller').setAttribute('data-prefix',pre);
-  updCost();
-}
-
-/* ================= BIAYA ================= */
-function updCost(){
-  var d=parseInt($('crDays').value,10)||0;
-  $('crCost').textContent=rupiah(d*price);
-}
-function updCostEx(){
-  var d=parseInt($('exDays').value,10)||0;
-  $('exCost').textContent=rupiah(d*price);
-}
-function updBulkCost(){
-  var n=parseInt($('blCount').value,10)||0;
-  var d=parseInt($('blDays').value,10)||0;
-  $('blCost').textContent=rupiah(n*d*price);
-}
-document.addEventListener('input',function(e){
-  if(e.target.id==='blCount'||e.target.id==='blDays')updBulkCost();
-});
-
-/* ================= MODAL ================= */
-function openModal(id){$(id).classList.add('open')}
+function fillPrefix(){var rs=$('crReseller')?.value||'',pre='FG';resellers.forEach(function(r){if(r.name===rs)pre=r.prefix});$('crReseller')?.setAttribute('data-prefix',pre);updCost()}
+function updCost(){var d=parseInt($('crDays').value,10)||0;$('crCost').textContent=rupiah(d*price)}
+function updCostEx(){var d=parseInt($('exDays').value,10)||0;$('exCost').textContent=rupiah(d*price)}
+function updBulkCost(){var n=parseInt($('blCount').value,10)||0,d=parseInt($('blDays').value,10)||0;$('blCost').textContent=rupiah(n*d*price)}
+document.addEventListener('input',function(e){if(e.target.id==='blCount'||e.target.id==='blDays')updBulkCost()});
+function openModal(id){$(id).classList.add('open');if(id==='mCreate')addDeviceControl()}
 function closeModal(id){$(id).classList.remove('open')}
-window.addEventListener('keydown',function(e){
-  if(e.key==='Escape'){
-    var open=document.querySelectorAll('.modal-bg.open');
-    for(var i=0;i<open.length;i++)open[i].classList.remove('open');
-  }
-});
+window.addEventListener('keydown',function(e){if(e.key==='Escape')document.querySelectorAll('.modal-bg.open').forEach(function(x){x.classList.remove('open')})});
 
 /* ================= KEY ACTIONS ================= */
-function pay(amount,label){
-  var s=mySaldo();
-  if(s<amount){
-    toast('err','Saldo Kurang','Butuh '+rupiah(amount)+', saldo '+rupiah(s)+'. Top up dulu!');
-    return false;
-  }
-  if(role==='reseller'){
-    setSaldo(myName,s-amount);
-    addTxn('PEMBELIAN',label,-amount);
-  }
-  return true;
+async function createKey(){
+  var owner=$('crOwner').value.trim();if(!owner)return toast('err','Gagal','Owner wajib diisi.');
+  var days=Math.max(1,parseInt($('crDays').value,10)||30),rs=$('crReseller').value,dl=Math.max(0,Math.min(1000,parseInt($('crDeviceLimit')?.value,10)||0));
+  var pre=$('crReseller').getAttribute('data-prefix')||'FG';if(role==='reseller')rs=myName;
+  try{
+    var k=await api('/api/keys',{method:'POST',body:JSON.stringify({action:'create',owner:owner,days:days,reseller:rs,device_limit:dl,key:genKey(pre)})});
+    bump();await loadOnline();normalize();closeModal('mCreate');$('crOwner').value='';renderAll();
+    addLog('Key <b class="keystr">'+esc(k.key)+'</b> diforge untuk <b>'+esc(owner)+'</b>','ok');
+    toast('ok','Key Dibuat',esc(k.key)+' — '+days+' hari');
+  }catch(e){toast('err','Gagal',esc(e.message))}
 }
-function createKey(){
-  var owner=$('crOwner').value.trim();
-  if(!owner){toast('err','Gagal','Owner wajib diisi.');return}
-  var days=Math.max(1,parseInt($('crDays').value,10)||30);
-  var rs=$('crReseller').value;
-  var pre=$('crReseller').getAttribute('data-prefix')||'FG';
-  if(role==='reseller')rs=myName;
-  var cost=days*price;
-  if(!pay(cost,'Forge key '+esc(owner)+' ('+days+'hr)'))return;
-  var k={key:genKey(pre),owner:owner,status:'active',created:Date.now(),expires:Date.now()+days*864e5,reseller:rs,cost:cost};
-  keys.unshift(k);
-  bump(); saveAll();
-  closeModal('mCreate');
-  $('crOwner').value='';
-  renderAll();
-  addLog('Key <b class="keystr">'+esc(k.key)+'</b> diforge untuk <b>'+esc(owner)+'</b>','ok');
-  toast('ok','Key Dibuat',esc(k.key)+' — '+days+' hari, biaya '+rupiah(cost));
+function openExtend(key){extendTarget=key;$('exKey').textContent=key;updCostEx();openModal('mExtend')}
+async function doExtend(){
+  if(!extendTarget)return;var d=Math.max(1,parseInt($('exDays').value,10)||30);
+  try{var k=await api('/api/keys',{method:'POST',body:JSON.stringify({action:'extend',key:extendTarget,days:d})});bump();await loadOnline();normalize();closeModal('mExtend');renderAll();toast('ok','Diperpanjang',esc(extendTarget)+' +'+d+' hari')}
+  catch(e){toast('err','Gagal',esc(e.message))}
 }
-function openExtend(key){
-  extendTarget=key;
-  $('exKey').textContent=key;
-  updCostEx();
-  openModal('mExtend');
+async function blockKey(key){
+  var k=keys.find(function(x){return x.key===key});if(!k)return;
+  var action=k.status==='blocked'?'unblock':'block';
+  try{await api('/api/keys',{method:'POST',body:JSON.stringify({action:action,key:key})});bump();await loadOnline();normalize();renderAll();toast(action==='block'?'err':'ok',action==='block'?'Diblokir':'Di-unblock',esc(key))}
+  catch(e){toast('err','Gagal',esc(e.message))}
 }
-function doExtend(){
-  var k=null;
-  for(var i=0;i<keys.length;i++)if(keys[i].key===extendTarget){k=keys[i];break}
-  if(!k)return;
-  var d=Math.max(1,parseInt($('exDays').value,10)||30);
-  var cost=d*price;
-  if(!pay(cost,'Extend '+k.key+' +'+d+'hr'))return;
-  k.expires+=d*864e5;
-  k.cost=(k.cost||0)+cost;
-  if(k.status==='expired')k.status='active';
-  bump(); saveAll();
-  closeModal('mExtend');
-  renderAll();
-  addLog('Key <b class="keystr">'+esc(k.key)+'</b> diperpanjang +'+d+' hr','warn');
-  toast('ok','Diperpanjang',esc(k.key)+' +'+d+' hari ('+rupiah(cost)+')');
+async function revokeKey(key){
+  if(!confirm('Cabut key '+key+' secara permanen?'))return;
+  try{await api('/api/keys',{method:'POST',body:JSON.stringify({action:'revoke',key:key})});bump();await loadOnline();normalize();renderAll();toast('err','Revoked',esc(key)+' dicabut permanen.')}
+  catch(e){toast('err','Gagal',esc(e.message))}
 }
-function blockKey(key){
-  for(var i=0;i<keys.length;i++){
-    if(keys[i].key===key){
-      keys[i].status=(keys[i].status==='blocked')?'active':'blocked';
-      addLog('Key <b class="keystr">'+esc(key)+'</b> '+(keys[i].status==='blocked'?'diblokir':'di-unblock'),keys[i].status==='blocked'?'bad':'ok');
-      toast(keys[i].status==='blocked'?'err':'ok',keys[i].status==='blocked'?'Diblokir':'Di-unblock',esc(key));
-      break;
-    }
-  }
-  bump(); saveAll(); renderAll();
+async function deleteKey(key){
+  if(role!=='admin')return toast('err','Ditolak','Hanya admin.');
+  if(!confirm('Hapus '+key+' dari registry?'))return;
+  try{await api('/api/keys',{method:'POST',body:JSON.stringify({action:'delete',key:key})});bump();await loadOnline();normalize();renderAll();toast('warn','Terhapus',esc(key))}
+  catch(e){toast('err','Gagal',esc(e.message))}
 }
-function revokeKey(key){
-  for(var i=0;i<keys.length;i++)if(keys[i].key===key)keys[i].status='revoked';
-  addLog('Key <b class="keystr">'+esc(key)+'</b> dicabut permanen','bad');
-  bump(); saveAll(); renderAll();
-  toast('err','Revoked',esc(key)+' dicabut permanen.');
+async function setDeviceLimit(key){
+  var k=keys.find(function(x){return x.key===key});if(!k)return;
+  var v=prompt('Device limit untuk '+key+' (0 = unlimited):',String(k.device_limit??1));
+  if(v===null)return;v=Math.max(0,Math.min(1000,parseInt(v,10)||0));
+  try{await api('/api/keys',{method:'POST',body:JSON.stringify({action:'set-device-limit',key:key,device_limit:v})});await loadOnline();normalize();renderAll();toast('ok','Device Limit','Limit '+v+' diterapkan.')}
+  catch(e){toast('err','Gagal',esc(e.message))}
 }
-function deleteKey(key){
-  keys=keys.filter(function(x){return x.key!==key});
-  addLog('Key <b class="keystr">'+esc(key)+'</b> dihapus dari registry','bad');
-  bump(); saveAll(); renderAll();
-  toast('warn','Terhapus',esc(key));
+async function resetDevices(key){
+  if(!confirm('Reset semua device untuk '+key+'?'))return;
+  try{await api('/api/keys',{method:'POST',body:JSON.stringify({action:'reset-devices',key:key})});await loadOnline();normalize();renderAll();toast('ok','Device Reset','Semua device dilepas.')}
+  catch(e){toast('err','Gagal',esc(e.message))}
 }
-function genBulk(){
-  var n=Math.min(200,Math.max(1,parseInt($('blCount').value,10)||5));
-  var d=Math.max(1,parseInt($('blDays').value,10)||30);
-  var pre=($('blPrefix').value||'FG').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||'FG';
-  var rs=(role==='reseller')?myName:'';
-  var cost=n*d*price;
-  if(!pay(cost,'Batch forge '+n+' key ('+d+'hr)'))return;
-  var out=[];
-  for(var i=0;i<n;i++){
-    keys.push({key:genKey(pre),owner:(role==='reseller'?myName:'bulk')+'_'+(i+1),status:'active',
-      created:Date.now(),expires:Date.now()+d*864e5,reseller:rs,cost:Math.round(cost/n)});
-    out.push(keys[keys.length-1].key);
-  }
-  bump(); saveAll(); renderAll();
-  $('bulkOut').textContent=out.join('\n');
-  addLog('<b>'+n+'</b> key di-forge via batch ('+d+' hr)','ok');
-  toast('ok','Batch Selesai',n+' key dibuat, total '+rupiah(cost));
+
+/* ================= BULK ================= */
+async function genBulk(){
+  var n=Math.min(200,Math.max(1,parseInt($('blCount').value,10)||5)),d=Math.max(1,parseInt($('blDays').value,10)||30),pre=($('blPrefix').value||'FG').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||'FG';
+  try{
+    var out=[];for(var i=0;i<n;i++)out.push(await api('/api/keys',{method:'POST',body:JSON.stringify({action:'create',owner:(role==='reseller'?myName:'bulk')+'_'+(i+1),days:d,reseller:role==='reseller'?myName:'',device_limit:1,key:genKey(pre)})}));
+    bump();await loadOnline();normalize();renderAll();$('bulkOut').textContent=out.map(function(x){return x.key}).join('\n');toast('ok','Batch Selesai',n+' key dibuat.');
+  }catch(e){toast('err','Batch Gagal',esc(e.message))}
 }
 
 /* ================= WALLET ================= */
 function setTp(v){$('tpAmt').value=v}
-function doTopup(){
-  var amt=Math.max(1000,parseInt($('tpAmt').value,10)||0);
-  if(role==='admin'){
-    toast('warn','Admin','Saldo admin tak terbatas — top up reseller via Reseller Hub.');
-    return;
-  }
-  setSaldo(myName,mySaldo()+amt);
-  addTxn('TOP UP','Self top up (simulasi)',amt);
-  bump(); saveAll();
-  closeModal('mTopup');
-  renderAll();
-  addLog('Top up <b>'+rupiah(amt)+'</b> masuk','ok');
-  toast('ok','Top Up Berhasil','+'+rupiah(amt)+' masuk ke saldo.');
+async function doTopup(){
+  if(role==='admin')return toast('warn','Admin','Gunakan Top Up pada Reseller Hub.');
+  toast('warn','Akses','Top up saldo reseller dilakukan oleh admin.');
 }
-function doTransfer(){
-  if(role!=='admin'){toast('err','Ditolak','Hanya admin.');return}
-  var to=$('trTo').value;
-  var amt=Math.max(1000,parseInt($('trAmt').value,10)||0);
-  if(!to){toast('err','Gagal','Pilih reseller tujuan.');return}
-  var r=getReseller(to);
-  if(!r){toast('err','Gagal','Reseller tidak ditemukan.');return}
-  r.saldo+=amt;
-  txns.unshift({time:new Date().toLocaleString('id-ID'),acc:'admin',type:'TRANSFER',
-    detail:'Admin kirim ke <b>'+esc(to)+'</b>',amount:0});
-  bump(); saveAll(); renderAll();
-  addLog('Transfer <b>'+rupiah(amt)+'</b> → <b>'+esc(to)+'</b>','ok');
-  toast('ok','Terkirim',rupiah(amt)+' → '+esc(to));
+async function doTransfer(){
+  if(role!=='admin')return toast('err','Ditolak','Hanya admin.');
+  var id=$('trTo').value,amt=Math.max(1000,parseInt($('trAmt').value,10)||0);if(!id)return toast('err','Gagal','Pilih reseller.');
+  try{await api('/api/resellers',{method:'POST',body:JSON.stringify({action:'topup',id:id,amount:amt})});bump();await loadOnline();normalize();renderAll();toast('ok','Terkirim',rupiah(amt)+' masuk.')}
+  catch(e){toast('err','Gagal',esc(e.message))}
 }
-function topupReseller(name){
-  var amt=prompt('Top up saldo untuk '+name+' (Rp):','50000');
-  if(amt===null)return;
-  amt=parseInt(amt,10);
-  if(!amt||amt<1000){toast('err','Gagal','Minimal Rp 1.000.');return}
-  var r=getReseller(name);
-  if(!r)return;
-  r.saldo+=amt;
-  txns.unshift({time:new Date().toLocaleString('id-ID'),acc:'admin',type:'TOP UP',
-    detail:'Admin top up <b>'+esc(name)+'</b> +'+rupiah(amt),amount:0});
-  bump(); saveAll(); renderAll();
-  addLog('Top up <b>'+esc(name)+'</b> +'+rupiah(amt),'ok');
-  toast('ok','Top Up OK',esc(name)+' +'+rupiah(amt));
+async function topupReseller(id,name){
+  var amt=prompt('Top up saldo untuk '+name+' (Rp):','50000');if(amt===null)return;amt=parseInt(amt,10);
+  if(!amt||amt<1000)return toast('err','Gagal','Minimal Rp 1.000.');
+  try{await api('/api/resellers',{method:'POST',body:JSON.stringify({action:'topup',id:id,amount:amt})});bump();await loadOnline();normalize();renderAll();toast('ok','Top Up OK',esc(name)+' +'+rupiah(amt))}
+  catch(e){toast('err','Gagal',esc(e.message))}
 }
-function resetPass(name){
-  var np=genKey('').replace(/-/g,'').substring(0,8).toLowerCase();
-  var r=getReseller(name);
-  if(!r)return;
-  r.pass=np;
-  bump(); saveAll(); renderAll();
-  toast('warn','Password Reset',esc(name)+' → password baru: <b>'+np+'</b> (catat!)');
+async function resetPass(id,name){
+  var np=prompt('Password baru untuk '+name+' (min. 6 karakter):','');if(np===null)return;
+  if(np.length<6)return toast('err','Gagal','Password minimal 6 karakter.');
+  try{await api('/api/resellers',{method:'POST',body:JSON.stringify({action:'reset-password',id:id,password:np})});toast('ok','Password Reset',esc(name)+' → password baru: <b>'+esc(np)+'</b>')}
+  catch(e){toast('err','Gagal',esc(e.message))}
 }
 
-/* ================= RESELLER & SETTINGS ================= */
-function addReseller(){
-  var name=$('rsName').value.trim();
-  if(!name){toast('err','Gagal','Nama reseller wajib diisi.');return}
-  var dup=false;
-  for(var i=0;i<resellers.length;i++){
-    if(resellers[i].name.toLowerCase()===name.toLowerCase()){dup=true;break}
-  }
-  if(dup){toast('err','Gagal','Reseller "'+esc(name)+'" sudah terdaftar.');return}
-  var quota=parseInt($('rsQuota').value,10)||30;
-  var days=parseInt($('rsDays').value,10)||30;
-  var saldo=parseInt($('rsSaldo').value,10)||0;
-  var prefix=($('rsPrefix').value||name.substring(0,2)).toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3)||'RS';
-  var user=name.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12);
-  var pass=genKey('').replace(/-/g,'').substring(0,8).toLowerCase();
-  resellers.push({name:name,quota:quota,sold:0,expires:Date.now()+days*864e5,prefix:prefix,user:user,pass:pass,saldo:saldo});
-  txns.unshift({time:new Date().toLocaleString('id-ID'),acc:'admin',type:'DAFTAR',
-    detail:'Reseller <b>'+esc(name)+'</b> dibuat (modal '+rupiah(saldo)+')',amount:0});
-  bump(); saveAll();
-  closeModal('mReseller');
-  $('rsName').value='';
-  $('rsPrefix').value='';
-  renderAll();
-  addLog('Reseller <b>'+esc(name)+'</b> terdaftar (akun: '+esc(user)+')','ok');
-  toast('ok','Reseller Ditambahkan',
-    esc(name)+'<br>login: <b class="keystr">'+esc(user)+'</b><br>pass: <b class="keystr">'+esc(pass)+'</b><br><small style="color:var(--mut)">Catat &amp; kirim ke reseller!</small>');
+/* ================= RESELLER ================= */
+async function addReseller(){
+  var name=$('rsName').value.trim(),quota=parseInt($('rsQuota').value,10)||0,days=parseInt($('rsDays').value,10)||30,balance=parseInt($('rsSaldo').value,10)||0,prefix=($('rsPrefix').value||name.slice(0,3)).toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3)||'RS';
+  if(!name)return toast('err','Gagal','Nama reseller wajib diisi.');
+  var user=name.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,20),pass=prompt('Password reseller '+name+' (min. 6 karakter):','');
+  if(pass===null||pass.length<6)return toast('err','Gagal','Password minimal 6 karakter.');
+  try{
+    var r=await api('/api/resellers',{method:'POST',body:JSON.stringify({action:'create',name:name,username:user,password:pass,quota:quota,days:days,prefix:prefix,balance:balance})});
+    bump();await loadOnline();normalize();closeModal('mReseller');$('rsName').value='';$('rsPrefix').value='';
+    renderAll();toast('ok','Reseller Ditambahkan','login: <b>'+esc(user)+'</b><br>password: <b>'+esc(pass)+'</b>');
+  }catch(e){toast('err','Gagal',esc(e.message))}
 }
+async function delReseller(id,name){
+  if(!confirm('Nonaktifkan reseller '+name+'?'))return;
+  try{await api('/api/resellers',{method:'POST',body:JSON.stringify({action:'delete',id:id})});bump();await loadOnline();normalize();renderAll();toast('warn','Dinonaktifkan',esc(name))}
+  catch(e){toast('err','Gagal',esc(e.message))}
+}
+async function savePrice(){
+  var p=parseInt($('setPrice').value,10);if(!p||p<100)return toast('err','Gagal','Harga minimal Rp 100/hari.');
+  try{await api('/api/settings',{method:'POST',body:JSON.stringify({key_price_per_day:p})});price=p;renderAll();toast('ok','Tersimpan','Harga key: '+rupiah(price)+'/hari.')}
+  catch(e){toast('err','Gagal',esc(e.message))}
+}
+function resetData(){toast('warn','Online Mode','Data tidak bisa dihapus dari browser. Kelola melalui API/database.')}
 
-function delReseller(name){
-  if(!confirm('Hapus reseller '+name+'?'))return;
-  resellers=resellers.filter(function(r){return r.name!==name});
-  bump(); saveAll(); renderAll();
-  addLog('Reseller <b>'+esc(name)+'</b> dihapus','bad');
-  toast('warn','Dihapus',esc(name)+' dikeluarkan.');
-}
-function savePrice(){
-  var p=parseInt($('setPrice').value,10);
-  if(!p||p<100){toast('err','Gagal','Harga minimal Rp 100/hari.');return}
-  price=p;
-  saveAll(); renderAll();
-  toast('ok','Tersimpan','Harga key: '+rupiah(price)+'/hari.');
-}
-function resetData(){
-  if(!confirm('Reset SEMUA data demo?'))return;
-  var ks=['fg_keys','fg_res','fg_txn','fg_acts','fg_price'];
-  for(var i=0;i<ks.length;i++)localStorage.removeItem(ks[i]);
-  location.reload();
-}
+/* ================= INIT ================= */
+document.addEventListener('click',function(e){
+  var r=document.createElement('div');r.className='ripple-dot';r.style.left=e.clientX+'px';r.style.top=e.clientY+'px';document.body.appendChild(r);setTimeout(function(){r.remove()},520)
+});
+function tickClock(){$('clock').textContent=new Date().toLocaleTimeString('id-ID',{hour12:false})}
+setInterval(tickClock,1000);tickClock();
+document.addEventListener('DOMContentLoaded',function(){addDeviceControl();updBulkCost();updCost()});
+setInterval(function(){if(sessionToken&&role){loadOnline().then(function(){normalize();renderAll()}).catch(function(){})}},60000);
 
-/* ================= MISC ================= */
-function tickClock(){
-  $('clock').textContent=new Date().toLocaleTimeString('id-ID',{hour12:false});
-}
-setInterval(tickClock,1000);
-tickClock();
-setInterval(function(){
-  var ch=false;
-  keys.forEach(function(k){
-    if(k.status==='active'&&k.expires<Date.now()){k.status='expired';ch=true}
-  });
-  if(ch){saveAll();renderAll()}
-},30000);
-updBulkCost();
-updCost();
+/* Expose device actions without changing the visual layout. */
+window.setDeviceLimit=setDeviceLimit;
+window.resetDevices=resetDevices;
+
 </script>
+
+
+
 </body>
 </html>
