@@ -1,79 +1,81 @@
-const { sb, admin, json } = require('./_supabase');
 
-function cleanKey(v) { return String(v || '').trim().toUpperCase(); }
-
-module.exports = async (req, res) => {
-  try {
-    if (!admin(req)) return json(res, 401, { error: 'unauthorized' });
-
-    if (req.method === 'GET') {
-      const rows = await sb('keys?select=*&order=created_at.desc', { method: 'GET' });
-      return json(res, 200, rows);
-    }
-
-    if (req.method !== 'POST') return json(res, 405, { error: 'method_not_allowed' });
-    const body = typeof req.body === 'object' ? req.body : {};
-    const action = String(body.action || '');
-
-    if (action === 'create') {
-      const key = cleanKey(body.key);
-      const owner = String(body.owner || '');
-      const days = Math.max(1, Number(body.days || 30));
-      if (!key) return json(res, 400, { error: 'missing_key' });
-      const expires = new Date(Date.now() + days * 86400000).toISOString();
-      const rows = await sb('keys', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ key, owner, status: 'active', expires_at: expires, uid: body.uid || null, reseller: body.reseller || '', cost: Number(body.cost || 0), device_limit: Math.max(0, Number.isFinite(Number(body.device_limit)) ? Math.floor(Number(body.device_limit)) : 1, devices: body.uid ? [String(body.uid)] : [] }) });
-      return json(res, 201, rows[0]);
-    }
-
-    const key = cleanKey(body.key);
-    if (!key) return json(res, 400, { error: 'missing_key' });
-
-    if (action === 'block' || action === 'revoke' || action === 'unblock') {
-      const status = action === 'block' ? 'blocked' : action === 'revoke' ? 'revoked' : 'active';
-      const rows = await sb(`keys?key=eq.${encodeURIComponent(key)}&select=id,key,status,expires_at&limit=1`, { method: 'GET' });
-      if (!rows.length) return json(res, 404, { error: 'not_found' });
-      const out = await sb(`keys?id=eq.${rows[0].id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ status }) });
-      return json(res, 200, out[0]);
-    }
-
-
-    if (action === 'set-device-limit') {
-      const limit = Math.max(0, Math.floor(Number(body.device_limit)));
-      if (!Number.isFinite(limit)) return json(res, 400, { error: 'invalid_device_limit' });
-      const rows = await sb(`keys?key=eq.${encodeURIComponent(key)}&select=id,key,device_limit,devices&limit=1`, { method: 'GET' });
-      if (!rows.length) return json(res, 404, { error: 'not_found' });
-      const current = Array.isArray(rows[0].devices) ? rows[0].devices : [];
-      if (limit > 0 && current.length > limit) {
-        return json(res, 400, { error: 'limit_below_current_devices', device_count: current.length, device_limit: limit });
-      }
-      const out = await sb(`keys?id=eq.${rows[0].id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ device_limit: limit }) });
-      return json(res, 200, out[0]);
-    }
-
-    if (action === 'reset-devices') {
-      const rows = await sb(`keys?key=eq.${encodeURIComponent(key)}&select=id,key,device_limit,devices&limit=1`, { method: 'GET' });
-      if (!rows.length) return json(res, 404, { error: 'not_found' });
-      const out = await sb(`keys?id=eq.${rows[0].id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ uid: null, devices: [] }) });
-      return json(res, 200, out[0]);
-    }
-
-    if (action === 'extend') {
-      const days = Math.max(1, Number(body.days || 30));
-      const rows = await sb(`keys?key=eq.${encodeURIComponent(key)}&select=id,expires_at&limit=1`, { method: 'GET' });
-      if (!rows.length) return json(res, 404, { error: 'not_found' });
-      const base = Math.max(Date.now(), new Date(rows[0].expires_at).getTime());
-      const expires = new Date(base + days * 86400000).toISOString();
-      const out = await sb(`keys?id=eq.${rows[0].id}`, { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: JSON.stringify({ expires_at: expires, status: 'active' }) });
-      return json(res, 200, out[0]);
-    }
-
-    if (action === 'delete') {
-      await sb(`keys?key=eq.${encodeURIComponent(key)}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
-      return json(res, 200, { ok: true });
-    }
-
-    return json(res, 400, { error: 'unknown_action' });
-  } catch (e) {
-    return json(res, 500, { error: 'server_error', message: String(e.message || e) });
+const {sb,json,requireAuth,requireAdmin,body,cleanKey,safeError}=require('./_supabase');
+function keyName(prefix){const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';let s='';for(let i=0;i<8;i++)s+=c[Math.floor(Math.random()*c.length)];return `${(prefix||'FG').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||'FG'}-${s.slice(0,4)}-${s.slice(4)}`;}
+async function oneKey(key, select='*'){const rows=await sb(`keys?key=eq.${encodeURIComponent(cleanKey(key))}&select=${encodeURIComponent(select)}&limit=1`);return rows[0]||null;}
+async function canAccess(s,k){return s.role==='admin'||(s.role==='reseller'&&k.reseller_id===s.reseller_id);}
+module.exports=async(req,res)=>{
+ try{
+  const s=requireAuth(req,res); if(!s)return;
+  if(req.method==='GET'){
+    let path='keys?select=*&order=created_at.desc';
+    if(s.role==='reseller')path+=`&reseller_id=eq.${encodeURIComponent(s.reseller_id)}`;
+    const rows=await sb(path);
+    return json(res,200,rows);
   }
+  if(req.method!=='POST')return json(res,405,{error:'method_not_allowed'});
+  const b=body(req), action=String(b.action||'');
+  if(action==='create'){
+    const owner=String(b.owner||'').trim(); if(!owner)return json(res,400,{error:'missing_owner'});
+    const days=Math.max(1,Math.min(3650,Math.floor(Number(b.days)||30)));
+    const rawDL=Number(b.device_limit); const dl=Math.max(0,Math.min(1000,Number.isFinite(rawDL)?Math.floor(rawDL):1));
+    const priceRow=(await sb(`settings?key=eq.key_price_per_day&select=value&limit=1`))[0];
+    const price=Math.max(0,Number(priceRow?.value||1000)); const cost=days*price;
+    let resellerId=null, resellerName='', key=cleanKey(b.key)||'';
+    if(s.role==='reseller'){
+      const r=(await sb(`resellers?id=eq.${encodeURIComponent(s.reseller_id)}&select=id,name,prefix&limit=1`))[0];
+      if(!r)return json(res,404,{error:'reseller_not_found'});
+      resellerId=r.id; resellerName=r.name;
+      if(!key)key=keyName(r.prefix);
+      const result=await sb('rpc/create_reseller_key',{method:'POST',body:JSON.stringify({p_reseller_id:r.id,p_key:key,p_owner:owner,p_expires_at:new Date(Date.now()+days*86400000).toISOString(),p_cost:cost,p_device_limit:dl})});
+      return json(res,201,result);
+    }
+    const rr=String(b.reseller||'').trim();
+    if(rr){
+      const r=(await sb(`resellers?name=eq.${encodeURIComponent(rr)}&select=id,name&limit=1`))[0];
+      if(!r)return json(res,404,{error:'reseller_not_found'});
+      resellerId=r.id;resellerName=r.name;
+    }
+    if(!key)key=keyName(resellerName?String(resellerName).slice(0,3):'FG');
+    const rows=await sb('keys',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({key,owner,status:'active',expires_at:new Date(Date.now()+days*86400000).toISOString(),reseller:resellerName,reseller_id:resellerId,cost,device_limit:dl,devices:[]})});
+    return json(res,201,rows[0]);
+  }
+  const key=cleanKey(b.key); if(!key)return json(res,400,{error:'missing_key'});
+  const k=await oneKey(key); if(!k)return json(res,404,{error:'not_found'});
+  if(!await canAccess(s,k))return json(res,403,{error:'forbidden'});
+  if(['block','unblock','revoke'].includes(action)){
+    if(s.role!=='admin'&&action==='revoke')return json(res,403,{error:'forbidden'});
+    const status=action==='block'?'blocked':action==='revoke'?'revoked':'active';
+    const out=await sb(`keys?id=eq.${k.id}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({status})});
+    return json(res,200,out[0]);
+  }
+  if(action==='delete'){
+    if(s.role!=='admin')return json(res,403,{error:'forbidden'});
+    await sb(`keys?id=eq.${k.id}`,{method:'DELETE'}); return json(res,200,{ok:true});
+  }
+  if(action==='reset-devices'||action==='reset_devices'){
+    const out=await sb(`keys?id=eq.${k.id}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({devices:[],uid:null})});
+    return json(res,200,out[0]);
+  }
+  if(action==='set-device-limit'){
+    const dl=Math.max(0,Math.min(1000,Math.floor(Number(b.device_limit))));
+    if(!Number.isFinite(dl))return json(res,400,{error:'invalid_device_limit'});
+    const count=Array.isArray(k.devices)?k.devices.length:0;
+    if(dl>0&&count>dl)return json(res,400,{error:'limit_below_current_devices',device_count:count,device_limit:dl});
+    const out=await sb(`keys?id=eq.${k.id}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({device_limit:dl})});
+    return json(res,200,out[0]);
+  }
+  if(action==='extend'){
+    const days=Math.max(1,Math.min(3650,Math.floor(Number(b.days)||30)));
+    const priceRow=(await sb(`settings?key=eq.key_price_per_day&select=value&limit=1`))[0];
+    const cost=days*Math.max(0,Number(priceRow?.value||1000));
+    if(s.role==='reseller'){
+      const out=await sb('rpc/extend_reseller_key',{method:'POST',body:JSON.stringify({p_key:key,p_reseller_id:s.reseller_id,p_days:days,p_cost:cost})});
+      return json(res,200,out);
+    }
+    const base=Math.max(new Date(k.expires_at).getTime(),Date.now());
+    const out=await sb(`keys?id=eq.${k.id}`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({expires_at:new Date(base+days*86400000).toISOString(),status:k.status==='expired'?'active':k.status,cost:Number(k.cost||0)+cost})});
+    return json(res,200,out[0]);
+  }
+  return json(res,400,{error:'unknown_action'});
+ }catch(e){const [code,msg]=safeError(e);return json(res,500,{error:code,message:msg,detail:process.env.NODE_ENV==='development'?String(e.message||e):undefined})}
 };
